@@ -9,6 +9,7 @@ int main()
     struct sockaddr_in servaddr;     // the "_in" in sockaddr_in is IPv4 socket address structure
     servaddr.sin_family = AF_INET;   // IPv4
     servaddr.sin_port = htons(8080); // port number
+    servaddr.sin_addr.s_addr = INADDR_ANY;
 
     socklen_t addrlen = sizeof(servaddr);
     char rcvMsg[100] = {0};              // allocated space for receiving from client
@@ -23,7 +24,8 @@ int main()
         exit(1);
     }
     // bind to specific IP addr. servaddr is the specified IP addr, and addrlen is the length of the IP addr
-    if (bind(socketfd, (sockaddr *)&servaddr, sizeof(servaddr)) == -1)
+    int bindfd = bind(socketfd, (sockaddr *)&servaddr, addrlen);
+    if (bindfd == -1)
     {
         cout << "bind failed";
         exit(1);
@@ -36,7 +38,7 @@ int main()
         exit(1);
     }
 
-    int acceptfd = accept(socketfd, (struct sockaddr *)&servaddr, &addrlen); // new socket after connect() is called on client side
+    int acceptfd = accept(socketfd, (struct sockaddr *)&servaddr, (socklen_t *)&addrlen); // new socket after connect() is called on client side
     if (acceptfd == -1)
     {
         cout << "accept failed";
