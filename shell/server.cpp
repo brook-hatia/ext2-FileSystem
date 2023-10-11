@@ -32,8 +32,6 @@ int main()
     }
     cout << "connection success" << endl;
 
-    char *sendMsg = new char[3000]; // allocate space for send message
-
     while (true)
     {
         char *readMsg = new char[3000];                                // allocated space for receiving from client
@@ -41,6 +39,8 @@ int main()
         cout << "\nClient: " << readMsg << endl;
 
         cout << "Server shell: ";
+
+        char *sendMsg = new char[3000]; // allocate space for send message
         cin >> sendMsg;
         string str = sendMsg;
         if (str == "exit")

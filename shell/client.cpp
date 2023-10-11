@@ -28,12 +28,12 @@ int main()
 
     while (true)
     {
-        char *sendMsg = new char[3000]; // allocate space for send message
-
         cout << "Client shell: ";
-        cin >> sendMsg;       // client put in command
-        string str = sendMsg; // convert character array to string
-        if (str == "exit")    // if client types "exit" terminate connection with server
+
+        char *sendMsg = new char[3000]; // allocate space for send message
+        cin >> sendMsg;                 // client put in command
+        string str = sendMsg;           // convert character array to string
+        if (str == "exit")              // if client types "exit" terminate connection with server
         {
             break;
         }
