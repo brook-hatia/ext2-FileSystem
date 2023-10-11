@@ -28,7 +28,7 @@ int main()
 
     while (true)
     {
-        char sendMsg[3000]; // allocate space for send message
+        char *sendMsg = new char[3000]; // allocate space for send message
 
         cout << "Client shell: ";
         cin >> sendMsg;       // client put in command
@@ -41,9 +41,9 @@ int main()
         int writefd = write(socketfd, sendMsg, (size_t)sizeof(sendMsg)); // send message to server
         // cout << "\nwrite successful" << sendMsg;
 
-        char rcvMsg[3000] = {0};                                     // allocated space for receiving from server
-        int readfd = read(socketfd, rcvMsg, (size_t)sizeof(rcvMsg)); // receive message from server
-        cout << "\nServer: " << rcvMsg << "\n";                      // read message from server
+        char *readMsg = new char[3000];                                // allocated space for receiving from server
+        int readfd = read(socketfd, readMsg, (size_t)sizeof(readMsg)); // receive message from server
+        cout << "\nServer: " << readMsg << "\n";                       // read message from server
     }
 
     close(socketfd);
