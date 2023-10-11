@@ -1,8 +1,7 @@
 #include <iostream>
 #include <sys/socket.h> //library for server-client communication
 #include <netinet/in.h> //for serveaddr_in which is used for IPv4
-#include <arpa/inet.h>
-#include <unistd.h> //for close()
+#include <unistd.h>     //for close()
 using namespace std;
 
 int main()
