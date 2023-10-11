@@ -20,6 +20,7 @@ int main()
     int bindfd = bind(socketfd, (sockaddr *)&servaddr, (socklen_t)sizeof(servaddr)); // bind to specific IP addr. servaddr is the specified IP addr, and the socket length of the servaddr in bytes
 
     int listenfd = listen(socketfd, 1); // listen to incoming connection. 1 is the backlog of incoming message in queue
+    cout << "listening to connection ..." << endl;
 
     socklen_t servaddrLen = sizeof(servaddr);                                    // size of servaddr in bytes
     int acceptfd = accept(socketfd, (struct sockaddr *)&servaddr, &servaddrLen); // new socket after connect() is called on client side
@@ -47,7 +48,7 @@ int main()
             break;
         }
 
-        int writefd = write(acceptfd, sendMsg, strlen(sendMsg)); // send message to client
+        int writefd = write(acceptfd, sendMsg, (size_t)sizeof(sendMsg)); // send message to client
         // cout << "\nwrite successful" << sendMsg;
     }
 
