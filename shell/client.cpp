@@ -13,33 +13,39 @@ int main()
     servaddr.sin_family = AF_INET;         // IPv4
     servaddr.sin_port = 8080;              // port number. "host to network short"
     servaddr.sin_addr.s_addr = INADDR_ANY; // bind to server's IP addr
-    socklen_t addrlen = sizeof(servaddr);
-    char readMsg[1024] = {0}; // allocate space to read from server
 
-    // for client we need socket(), connect(), send(), receive()
+    // for client we need socket(), connect(), read(), write() function calls
 
     int socketfd = socket(AF_INET, SOCK_STREAM, 0); // create socket. AF_INET for ipv4, SOCK_STREAM for TCP connection, 0 for protocol
-    if (socketfd == -1)
-    {
-        cout << "\nsocket creation failed";
-        exit(1);
-    }
 
-    int connectfd = connect(socketfd, (struct sockaddr *)&servaddr, addrlen); // send connection request to server, which the server will accept if successful
-    if (connectfd == -1)
-    {
-        cout << "\nconnect failed";
-        exit(1);
-    }
+    int connectfd = connect(socketfd, (struct sockaddr *)&servaddr, (socklen_t)sizeof(servaddr)); // send connection request to server, which the server will accept if successful
 
-    int readfd = read(socketfd, readMsg, sizeof(readMsg)); // receive message from server
-    if (readfd == -1)
+    if (socketfd == -1 || connectfd == -1) // error returns -1
     {
-        cout << "\nreceive failed";
-        exit(1);
+        cout << "connection failed" << endl;
+        return 1;
     }
+    cout << "connection successful" << endl;
 
-    cout << "\nreceive successful: " << readMsg;
+    while (true)
+    {
+        char sendMsg[3000]; // allocate space for send message
+
+        cout << "Client shell: ";
+        cin >> sendMsg;       // client put in command
+        string str = sendMsg; // convert character array to string
+        if (str == "exit")    // if client types "exit" terminate connection with server
+        {
+            break;
+        }
+
+        int writefd = write(socketfd, sendMsg, strlen(sendMsg)); // send message to server
+        // cout << "\nwrite successful" << sendMsg;
+
+        char rcvMsg[3000] = {0};                             // allocated space for receiving from server
+        int readfd = read(socketfd, rcvMsg, sizeof(rcvMsg)); // receive message from server
+        cout << "\nServer: " << rcvMsg << "\n";              // read message from server
+    }
 
     close(socketfd);
 }
