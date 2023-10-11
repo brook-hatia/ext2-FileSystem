@@ -32,11 +32,11 @@ int main()
     }
     cout << "connection success" << endl;
 
-    char sendMsg[100]; // allocate space for send message
+    char *sendMsg = new char[3000]; // allocate space for send message
 
     while (true)
     {
-        char readMsg[3000] = {0};                                      // allocated space for receiving from client
+        char *readMsg = new char[3000];                                // allocated space for receiving from client
         int readfd = read(acceptfd, readMsg, (size_t)sizeof(readMsg)); // receive message from client
         cout << "\nClient: " << readMsg << endl;
 
