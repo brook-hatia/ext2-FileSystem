@@ -38,12 +38,12 @@ int main()
             break;
         }
 
-        int writefd = write(socketfd, sendMsg, strlen(sendMsg)); // send message to server
+        int writefd = write(socketfd, sendMsg, (size_t)sizeof(sendMsg)); // send message to server
         // cout << "\nwrite successful" << sendMsg;
 
-        char rcvMsg[3000] = {0};                             // allocated space for receiving from server
-        int readfd = read(socketfd, rcvMsg, sizeof(rcvMsg)); // receive message from server
-        cout << "\nServer: " << rcvMsg << "\n";              // read message from server
+        char rcvMsg[3000] = {0};                                     // allocated space for receiving from server
+        int readfd = read(socketfd, rcvMsg, (size_t)sizeof(rcvMsg)); // receive message from server
+        cout << "\nServer: " << rcvMsg << "\n";                      // read message from server
     }
 
     close(socketfd);
