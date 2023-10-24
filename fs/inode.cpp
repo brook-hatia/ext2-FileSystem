@@ -112,7 +112,7 @@ inodeTable::~inodeTable()
     }
 }
 
-int *inodeTable::inode_lookup()
+int *inodeTable::free_inode_lookup()
 {
     int *rc = new int[2];
     rc[0] = -1;
@@ -136,7 +136,7 @@ int *inodeTable::inode_lookup()
 
 void inodeTable::create_inode(inode *new_inode)
 {
-    int *rc = inode_lookup();
+    int *rc = free_inode_lookup();
 
     int i = rc[0];
     int j = rc[1];
@@ -147,22 +147,63 @@ void inodeTable::create_inode(inode *new_inode)
     }
 
     inodes[i][j] = *new_inode;
+    bitmap[i][j] = 1;
+}
+
+inode *inodeTable::Search_inode_from_table(int num)
+{
+    inode *rc = NULL;
+
+    for (int i = 0; i < 32; i++)
+    {
+        for (int j = 0; j < 32; j++)
+        {
+            if (inodes[i][j].inode_num == num)
+            {
+                rc = &inodes[i][j];
+                break;
+            }
+        }
+    }
+
+    return rc;
 }
 
 int main()
 {
     inode *node1 = new inode();
-    node1->Mode = "node 1";
+    node1->Mode = "file 1";
+    node1->inode_num = 1;
 
     inodeTable *it = new inodeTable(32);
 
-    cout << it->inode_lookup()[0] << " " << it->inode_lookup()[1] << endl;
-
     it->create_inode(node1);
-    cout << it->inode_lookup()[0] << " " << it->inode_lookup()[1] << endl;
+    // for (int i = 0; i < 32; i++)
+    // {
+    //     for (int j = 0; j < 32; j++)
+    //     {
+    //         cout << it->bitmap[i][j];
+    //     }
+    //     cout << endl;
+    // }
+
+    cout << endl;
 
     inode *node2 = new inode();
-    node2->Mode = "node 2";
+    node2->Mode = "file 2";
+    node2->inode_num = 2;
     it->create_inode(node2);
-    cout << it->inode_lookup()[0] << " " << it->inode_lookup()[1] << endl;
+    // for (int i = 0; i < 32; i++)
+    // {
+    //     for (int j = 0; j < 32; j++)
+    //     {
+    //         cout << it->bitmap[i][j];
+    //     }
+    //     cout << endl;
+    // }
+
+    cout << endl;
+
+    inode *wanted = it->Search_inode_from_table(2);
+    cout << wanted->Mode << endl;
 }
