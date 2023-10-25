@@ -82,8 +82,10 @@ inode::~inode()
     }
 }
 
-inodeTable::inodeTable(int size)
+inodeList::inodeList(int size)
 {
+    this->bm = new int[size * size];
+
     this->bitmap = new int *[size];
     for (int i = 0; i < size; i++)
     {
@@ -97,7 +99,7 @@ inodeTable::inodeTable(int size)
     }
 }
 
-inodeTable::~inodeTable()
+inodeList::~inodeList()
 {
     // destruct bitmap at every level
     for (int i = 0; i < 32; i++)
@@ -112,45 +114,37 @@ inodeTable::~inodeTable()
     }
 }
 
-int *inodeTable::free_inode_lookup()
+int inodeList::free_inode_lookup()
 {
-    int *rc = new int[2];
-    rc[0] = -1;
-    rc[1] = -1;
-
-    for (int i = 0; i < 32; i++)
+    int rc = 0;
+    for (int i = 0; i < 32 * 32; i++)
     {
-        for (int j = 0; j < 32; j++)
+        if (bm[i] == 0)
         {
-            if (bitmap[i][j] == 0)
-            {
-                rc[0] = i;
-                rc[1] = j;
-                return rc;
-            }
+            rc = i;
+            break;
         }
     }
 
     return rc;
 }
 
-void inodeTable::create_inode(inode *new_inode)
+void inodeList::create_inode(inode *new_inode)
 {
-    int *rc = free_inode_lookup();
-
-    int i = rc[0];
-    int j = rc[1];
-    if (i == -1 && j == -1)
+    int rc = free_inode_lookup();
+    int row = rc / 32;
+    int column = rc % 32;
+    if (rc == -1)
     {
         cout << "All inodes are occupied" << endl;
         return;
     }
 
-    inodes[i][j] = *new_inode;
-    bitmap[i][j] = 1;
+    inodes[row][column] = *new_inode;
+    bm[rc] = 1;
 }
 
-inode *inodeTable::Search_inode_from_table(int num)
+inode *inodeList::Search_inode_from_table(int num)
 {
     inode *rc = NULL;
 
@@ -175,7 +169,7 @@ int main()
     node1->Mode = "file 1";
     node1->inode_num = 1;
 
-    inodeTable *it = new inodeTable(32);
+    inodeList *it = new inodeList(32);
 
     it->create_inode(node1);
     // for (int i = 0; i < 32; i++)
@@ -186,23 +180,38 @@ int main()
     //     }
     //     cout << endl;
     // }
+    // int i = 0;
+    // while (i < 32 * 32)
+    // {
+    //     cout << it->bm[i];
 
-    cout << endl;
+    //     if (i != 0 && i % 32 == 0)
+    //     {
+    //         cout << endl;
+    //     }
+    //     i++;
+    // }
 
     inode *node2 = new inode();
     node2->Mode = "file 2";
     node2->inode_num = 2;
     it->create_inode(node2);
-    // for (int i = 0; i < 32; i++)
+
+    // cout << "\n"
+    //      << endl;
+    // i = 0;
+    // while (i < 32 * 32)
     // {
-    //     for (int j = 0; j < 32; j++)
+    //     cout << it->bm[i];
+
+    //     if (i != 0 && i % 32 == 0)
     //     {
-    //         cout << it->bitmap[i][j];
+    //         cout << endl;
     //     }
-    //     cout << endl;
+    //     i++;
     // }
 
-    cout << endl;
+    // cout << endl;
 
     inode *wanted = it->Search_inode_from_table(2);
     cout << wanted->Mode << endl;
