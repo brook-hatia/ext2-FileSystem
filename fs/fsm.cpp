@@ -3,13 +3,14 @@
 
 int main ()
 {
+    //Set Block size
     int BLOCK_SIZE = 4096;
     char buffer[BLOCK_SIZE];
     FILE *pFile = fopen ("disk", "wb");
     memset(buffer, 0, BLOCK_SIZE); // intialize null buffer
 
     /* Using buffer to initialize whole disk as NULL  */
-    for (int i = 0; i < 524288; ++i)
+    for (int i = 0; i < 2; ++i)
         fwrite(buffer, 1, BLOCK_SIZE, pFile);
 
     fclose(pFile);
