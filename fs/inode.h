@@ -8,6 +8,7 @@ using namespace std;
 class inode
 {
     friend class inodeTable;
+    friend class User;
 
 public:
     // meta data
@@ -33,17 +34,26 @@ public:
     ~inode();
 };
 
-class inodeTable
+class inodeList
 {
 
 public:
-    int **bitmap;
+    int *bitmap;
     inode **inodes;
-    inodeTable(int size);
-    ~inodeTable();
+    inodeList();
+    ~inodeList();
 
-    int *inode_lookup();
+    int free_inode_lookup(); // to use it in fs.cpp
     void create_inode(inode *new_inode);
+    inode *Search_inode_from_table(int num);
+
+    // // inode read/write
+    // void write_inode_to_disk();
+    // void read_inode_from_disk(bool display);
+
+    // // content read/write
+    // int write_content_to_disk(string str, int offset);
+    // void read_content_from_disk(string str, int offset, int endPos, bool display);
 };
 
 #endif
