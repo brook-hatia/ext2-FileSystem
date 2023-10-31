@@ -16,13 +16,16 @@ public:
 
     bool check_disk();
     void write_to_disk(std::string str);
-    std::string read_from_disk();
+    std::string read_from_disk(std::string str);
 };
 
-struct Block
+class Block
 {
     friend class FileSystem;
+
+public:
     char text[4096];
+    Block();
 };
 
 class User

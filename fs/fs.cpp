@@ -6,6 +6,14 @@
 
 using namespace std;
 
+Block::Block()
+{
+    for (int i = 0; i < BLOCKSIZE; i++)
+    {
+        this->text[i] = 0;
+    }
+}
+
 User::User()
 {
     this->permission = 777; // root user
@@ -26,60 +34,59 @@ FileSystem::~FileSystem()
 // check if "disk" file exists
 bool FileSystem::check_disk()
 {
-    ifstream file;
-    file.open("disk", ifstream::in);
+    ifstream file("disk", ifstream::in);
 
     return file.good();
 }
 
 void FileSystem::write_to_disk(std::string str)
 {
-    int offset = inL->free_inode_lookup(); // return next free bit from inode bitmap
-    cout << offset << endl;
-    ofstream file;
-    file.open("disk", ios_base::app);
+    bool is_file = check_disk();
 
-    Block write_block;
-    strcpy(write_block.text, str.c_str()); // copy prompt to block
+    fstream file("disk", ios::in | ios::out | ios::trunc);
 
-    file.seekp(4096 * offset);
+    int block_pos = 0; // get position of block on disk
 
-    file.write(reinterpret_cast<char *>(&write_block), sizeof(write_block)); // write block on "disk"
-    file.close();
+    if (!is_file)
+    {
+        // write bitmap on disk
+        bi
+        for (int i = 0; i < 1024; i++)
+        {
+            file.write((char *)&bitmap, sizeof(bitmap));
+        }
+        /********************************** I haven't written indirect block pointers. Finish that later ***************************/
+        // write inodes to disk
+        for (int i = 0; i < 1024; i++)
+        {
+            inode *new_inode = new inode();
+            file.write((char *)&new_inode, sizeof(new_inode));
+        }
 
-    // ******************** add blocks on inode ******************************
+        // write contents on disk
+        Block write_block;
+        strcpy(write_block.text, str.c_str());
+        file.write((char *)&write_block, sizeof(write_block));
+        block_pos = static_cast<int>(file.tellp());
 
-    this->curr->block_pointers[offset] = 4096 * offset; // save the block in the current inode
-    // cout << this->curr->block_pointers[offset];
-    this->curr->inode_num++;
-    inL->create_inode(this->curr); // add inode to inode list
+        // write block position to a free inode
+    }
 }
 
 // read blocks via inodes
-std::string FileSystem::read_from_disk()
+std::string FileSystem::read_from_disk(std::string str)
 {
     std::string rc = "";
 
-    ifstream file;
-    file.open("disk");
+    fstream file("disk", ios::in);
 
-    for (int i = 0; i <= this->curr->inode_num; i++)
-    {
-        int offset = this->curr->block_pointers[i];
+    file.seekg(1024 * 2);
 
-        // cout << offset << endl;
-        file.seekg(offset); // Move the get pointer to the appropriate position
+    Block read_block;
+    strcpy(read_block.text, " ");
+    file.read((char *)&read_block, sizeof(read_block));
 
-        Block read_block;
-        file.read(reinterpret_cast<char *>(&read_block), sizeof(read_block)); // Read the block from the file
-
-        // Output = " read_block.text "
-        rc += " ";
-        rc += read_block.text;
-        rc += " ";
-    }
-
-    file.close(); // Close the file after reading
+    rc = read_block.text;
 
     return rc;
 }
