@@ -1,16 +1,47 @@
 #include <iostream>
 #include <string>
 #include <fstream>
+#include <cstring>
 #include "fs.h"
+#include <stdio.h>
+#include <string.h>
+
 #define BLOCKSIZE 4096
+#define BLOCKNUMBER 20
 
 using namespace std;
 
 FileSystem::FileSystem()
 {
     // initialize block and inode bitmaps
-    block_bitmap = new int[1024];
-    inode_bitmap = new int[1024];
+    for (int i = 0; i < 10; i++)
+    {
+        block_bitmap[i] = 0;
+        inode_bitmap[i] = 0;
+    }
+
+    // initialize inode
+    Inode in;
+    in.Mode = "";
+    in.block_count = 0;
+    in.link_count = 0;
+    in.uid = 0;
+    in.gid = 0;
+    in.file_size = 0;
+    in.creation_time = "";
+    in.modified_time = "";
+    in.read_time = "";
+
+    for (int i = 0; i < 100; i++)
+    {
+        in.block_pointers[i] = -1; // 61,917,364,224 block pointers (direct pointers + indirect pointers(single, double, triple))
+    }
+
+    // initialize inodelist
+    for (int i = 0; i < 10; i++)
+    {
+        inodeList[i] = in;
+    }
 
     // initialize block
     Block bk;
@@ -24,12 +55,6 @@ FileSystem::FileSystem()
     usr.permission = "";
 }
 
-FileSystem::~FileSystem()
-{
-    delete[] block_bitmap;
-    delete[] inode_bitmap;
-}
-
 int FileSystem::inode_lookup()
 {
     int rc = -1;
@@ -41,31 +66,34 @@ int FileSystem::inode_lookup()
     }
     else
     {
-        // read back the inode bitmap from disk
-        int temp_bitmap[1024] = {0};
+        // Read the inode bitmap from disk
+        int temp_bitmap[10] = {0};
+        file.seekg(10 * sizeof(int)); // Seek to the beginning of the inode bitmap
+        file.read(reinterpret_cast<char *>(temp_bitmap), 10 * sizeof(int));
 
-        // look for a free bit (bit = 0)
-        for (int i = 0; i < 1024; i++)
+        // Look for a free bit (bit = 0)
+        for (int i = 0; i < 10; i++)
         {
             if (temp_bitmap[i] == 0)
             {
                 rc = i;
                 temp_bitmap[rc] = 1;
-                file.seekp(i * sizeof(int));
-                file.write((char *)&temp_bitmap, sizeof(temp_bitmap));
+                file.seekp((i + 10) * sizeof(int));                                  // Seek to the position in the file
+                file.write(reinterpret_cast<char *>(&temp_bitmap[rc]), sizeof(int)); // Write the updated value back to the file
                 break;
             }
         }
     }
+
+    file.close(); // Close the file
 
     return rc;
 }
 
 bool FileSystem::check_disk()
 {
-    fstream file("disk", ios::in); // read disk
-
-    return file.good();
+    ifstream in("disk"); // read disk
+    return in.good();
 }
 
 void FileSystem::initialize_inode(Inode &in)
@@ -79,56 +107,125 @@ void FileSystem::initialize_inode(Inode &in)
     in.creation_time = "";
     in.modified_time = "";
     in.read_time = "";
-    in.block_pointers = new int[100]; // 61,917,364,224 block pointers (direct pointers + indirect pointers(single, double, triple))
+
     for (int i = 0; i < 100; i++)
     {
-        in.block_pointers[i] = -1;
+        in.block_pointers[i] = -1; // 61,917,364,224 block pointers (direct pointers + indirect pointers(single, double, triple))
     }
+}
+
+void FileSystem::initialize_File_System()
+{
+    ofstream out("disk", ios::binary); // Open the file in binary mode
+
+    // Write inode bitmap
+    out.write(reinterpret_cast<char *>(inode_bitmap), 10 * sizeof(int));
+
+    // Write block bitmap
+    out.write(reinterpret_cast<char *>(block_bitmap), 10 * sizeof(int));
+
+    // Write inodes
+    Inode inode;
+    initialize_inode(inode);
+    for (int i = 0; i < 10; i++)
+    {
+        out.write(reinterpret_cast<char *>(&inode), sizeof(Inode));
+    }
+
+    // Write block to disk
+    Block block;
+    strcpy(block.text, "0:0");
+    out.write(reinterpret_cast<char *>(&block), sizeof(Block));
+
+    out.close();
 }
 
 void FileSystem::write_to_disk(std::string str)
 {
     bool is_file = check_disk();
 
-    fstream file("disk", ios::out | ios::trunc); // write on disk
-
-    Block block;       // initialize block
-    int block_pos = 0; // position of block on the disk
-
-    // disk doesn't exist, so initialize the disk
     if (!is_file)
     {
-        // write block_bitmap
-        file.write((char *)&block_bitmap, sizeof(block_bitmap));
-
-        // write inode_bitmap
-        file.write((char *)&inode_bitmap, sizeof(inode_bitmap));
-
-        // write inodes
-        for (int i = 0; i < 100; i++)
-        {
-            Inode in;
-            file.write((char *)&in, sizeof(in));
-        }
-
-        // write root ("0:0")
-        strcpy(block.text, "0:0");
+        initialize_File_System();
     }
 
-    else
-    {
-        strcpy(block.text, str.c_str());
-    }
+    fstream out("disk", ios::app | ios::binary); // write the file on the disk
 
-    file.write((char *)&block, sizeof(block));
+    // write block
+    Block block;
+    strcpy(block.text, str.c_str());
+    out.write(reinterpret_cast<char *>(&block), sizeof(Block));
+    int block_pos = static_cast<int>(out.tellp()); // get current position of the block on the disk
 
-    block_pos = static_cast<int>(file.tellp()); // get current position of file on the disk
+    // initialize inode
+    Inode inode;
+    initialize_inode(inode);
 
-    // write address of block to a free inode
     int offset = inode_lookup();
-    Inode temp_inode;
-    initialize_inode(temp_inode);
-    temp_inode.block_pointers[0] = block_pos;
-    file.seekp(offset * sizeof(Inode));
-    file.write((char *)&temp_inode, sizeof(temp_inode));
+
+    out.seekp(offset * sizeof(Inode));
+
+    for (int i = 0; i < 100; i++)
+    {
+        if (inode.block_pointers[i] == -1)
+        {
+            inode.block_pointers[i] = block_pos; // put the position in the inode's block_pointer
+        }
+    }
+
+    out.write(reinterpret_cast<char *>(&inode), sizeof(Inode)); // write the inode
+}
+
+void FileSystem::read_from_disk(std::string str)
+{
+    ifstream in("disk", ios::binary); // read file from disk
+
+    // Read block bitmap
+    in.read(reinterpret_cast<char *>(block_bitmap), 10 * sizeof(int));
+
+    // Read inode bitmap
+    in.read(reinterpret_cast<char *>(inode_bitmap), 10 * sizeof(int));
+
+    // Read inodes
+    for (int i = 0; i < 10; i++)
+    {
+        in.read(reinterpret_cast<char *>(&inodeList[i]), sizeof(Inode));
+    }
+
+    in.close();
+
+    // Print block bitmap
+    for (int i = 0; i < 10; i++)
+    {
+        cout << block_bitmap[i];
+    }
+
+    cout << endl;
+
+    // Print inode bitmap
+    for (int i = 0; i < 10; i++)
+    {
+        cout << inode_bitmap[i];
+    }
+
+    cout << endl;
+
+    // within the inodelist
+    // search each inode's block-pointer[i]
+    // check if block.text at the ith position on disk matches with str
+    // Inode temp_inode;
+    // initialize_inode(temp_inode);
+
+    // for (int i = 0; i < 10; i++)
+    // {
+    //     temp_inode = inodeList[i];
+    //     for (int j = 0; j < 100; i++)
+    //     {
+    //         if (temp_inode.block_pointers[j] != -1)
+    //         {
+    //             in.seekg(i * sizeof(Inode));
+    //             in.read(reinterpret_cast<char *>(&temp_inode), sizeof(Inode)); // Write the updated value back to the file
+    //         }
+    //     }
+    // }
 }

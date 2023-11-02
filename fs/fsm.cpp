@@ -7,7 +7,6 @@ using namespace std;
 int main()
 {
     FileSystem fs;
-
-    std::string str;
-    fs.write_to_disk("users");
+    fs.write_to_disk("public");
+    fs.read_from_disk("0:0");
 }
