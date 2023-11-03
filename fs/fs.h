@@ -5,7 +5,7 @@
 //Datas
 #define BLOCK_SIZE 4096
 #define TOTAL_BLOCK_NUM 4096
-#define TOTAL_INODE_NUM 4096
+#define TOTAL_INODE_NUM 1024
 
 
 class FileSystem
@@ -32,7 +32,7 @@ class FileSystem
             char modified_time[14];
             char read_time[14];
             int direct_block_pointers[12];
-            int indierct_block_address;
+            int indirect_block_address;
         };
 
         struct Inode inodeArray[TOTAL_INODE_NUM];        
@@ -60,11 +60,13 @@ class FileSystem
 
         void initialize_inode(Inode &inode);  // initialize new inode with generic values
 
+
         void initialize_File_System();        // initialize disk with bitmaps, and inodes
         void write_to_disk(auto x, int len, int blockNum);  // write block with text "str" on disk
         int read_disk(auto &x, int blockNum); // read inode with pointer[0] = str from the list of inodes on the disk
-        
-        void ps();
+        void readInode(Inode &i, int inodeNum);
+        void updateInode(Inode i, int inodeNum);
+        void ps(); //Just for testing
 };
 
 #endif
