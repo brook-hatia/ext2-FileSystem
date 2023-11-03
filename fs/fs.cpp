@@ -1,231 +1,337 @@
-#include <iostream>
-#include <string>
-#include <fstream>
-#include <cstring>
-#include "fs.h"
 #include <stdio.h>
 #include <string.h>
-
-#define BLOCKSIZE 4096
-#define BLOCKNUMBER 20
+#include <iostream>
+#include "fs.h"
 
 using namespace std;
 
 FileSystem::FileSystem()
 {
-    // initialize block and inode bitmaps
-    for (int i = 0; i < 10; i++)
-    {
-        block_bitmap[i] = 0;
-        inode_bitmap[i] = 0;
-    }
+    /************ Brook Hatia ***************/
 
-    // initialize inode
-    Inode in;
-    in.Mode = "";
-    in.block_count = 0;
-    in.link_count = 0;
-    in.uid = 0;
-    in.gid = 0;
-    in.file_size = 0;
-    in.creation_time = "";
-    in.modified_time = "";
-    in.read_time = "";
+    curr_dir = NULL;
 
-    for (int i = 0; i < 100; i++)
-    {
-        in.block_pointers[i] = -1; // 61,917,364,224 block pointers (direct pointers + indirect pointers(single, double, triple))
-    }
-
-    // initialize inodelist
-    for (int i = 0; i < 10; i++)
-    {
-        inodeList[i] = in;
-    }
-
-    // initialize block
-    Block bk;
-    for (int i = 0; i < BLOCKSIZE; i++)
-    {
-        bk.text[i] = ' ';
-    }
-
-    // initialize user
-    User usr;
-    usr.permission = "";
+    /************ endBrook Hatia ***************/
 }
 
-int FileSystem::inode_lookup()
+FileSystem::~FileSystem()
+{
+    /************ Brook Hatia ***************/
+
+    delete curr_dir;
+
+    /************ end Brook Hatia ***************/
+}
+
+/************ Brook Hatia ***************/
+
+bool FileSystem::check_disk()
+{
+    bool rc = true;
+
+    FILE *pFile = fopen("disk", "rb");
+    if (pFile == NULL)
+    {
+        rc = false; // Disk doesn't exist
+    }
+
+    fclose(pFile);
+    return rc;
+}
+
+int FileSystem::inode_lookup(iNodeBitmap &ibm, bool change_bit)
 {
     int rc = -1;
 
-    fstream file("disk", ios::in | ios::out); // read/write on disk
-    if (!file.is_open())
+    for (int i = 0; i < BLOCK_SIZE; i++)
     {
-        cout << "Couldn't open file";
-    }
-    else
-    {
-        // Read the inode bitmap from disk
-        int temp_bitmap[10] = {0};
-        file.seekg(10 * sizeof(int)); // Seek to the beginning of the inode bitmap
-        file.read(reinterpret_cast<char *>(temp_bitmap), 10 * sizeof(int));
-
-        // Look for a free bit (bit = 0)
-        for (int i = 0; i < 10; i++)
+        if (ibm.imap[i] == '0')
         {
-            if (temp_bitmap[i] == 0)
+            rc = i;
+
+            if (change_bit)
             {
-                rc = i;
-                temp_bitmap[rc] = 1;
-                file.seekp((i + 10) * sizeof(int));                                  // Seek to the position in the file
-                file.write(reinterpret_cast<char *>(&temp_bitmap[rc]), sizeof(int)); // Write the updated value back to the file
-                break;
+                ibm.imap[rc] = '1';
             }
+
+            break;
         }
     }
 
-    file.close(); // Close the file
+    if (change_bit)
+    {
+        write_to_disk(ibm, sizeof(iNodeBitmap), 1);
+    }
 
     return rc;
 }
 
-bool FileSystem::check_disk()
+// initialize Directory
+void FileSystem::initialize_dir(Directory &dir)
 {
-    ifstream in("disk"); // read disk
-    return in.good();
-}
-
-void FileSystem::initialize_inode(Inode &in)
-{
-    in.Mode = "";
-    in.block_count = 0;
-    in.link_count = 0;
-    in.uid = 0;
-    in.gid = 0;
-    in.file_size = 0;
-    in.creation_time = "";
-    in.modified_time = "";
-    in.read_time = "";
-
     for (int i = 0; i < 100; i++)
     {
-        in.block_pointers[i] = -1; // 61,917,364,224 block pointers (direct pointers + indirect pointers(single, double, triple))
+        dir.name[i] = " ";
+        dir.inode_num[i] = 0;
     }
 }
+
+/************ end Brook Hatia ***************/
 
 void FileSystem::initialize_File_System()
 {
-    ofstream out("disk", ios::binary); // Open the file in binary mode
+    char buffer[BLOCK_SIZE];
+    FILE *pFile = fopen("disk", "wb");
+    memset(buffer, 0, BLOCK_SIZE); // initialize null buffer
 
-    // Write inode bitmap
-    out.write(reinterpret_cast<char *>(inode_bitmap), 10 * sizeof(int));
-
-    // Write block bitmap
-    out.write(reinterpret_cast<char *>(block_bitmap), 10 * sizeof(int));
-
-    // Write inodes
-    Inode inode;
-    initialize_inode(inode);
-    for (int i = 0; i < 10; i++)
+    // Using buffer to initialize whole disk as NULL
+    for (int i = 0; i < TOTAL_BLOCK_NUM; ++i)
     {
-        out.write(reinterpret_cast<char *>(&inode), sizeof(Inode));
+        fwrite(buffer, 1, BLOCK_SIZE, pFile);
     }
 
-    // Write block to disk
-    Block block;
-    strcpy(block.text, "0:0");
-    out.write(reinterpret_cast<char *>(&block), sizeof(Block));
+    fclose(pFile);
 
-    out.close();
-}
-
-void FileSystem::write_to_disk(std::string str)
-{
-    bool is_file = check_disk();
-
-    if (!is_file)
+    // Initialize block bit map
+    blockBitmap bm;
+    for (int i = 0; i < TOTAL_BLOCK_NUM; ++i)
     {
-        initialize_File_System();
+        bm.bmap[i] = '0';
     }
+    write_to_disk(bm, sizeof(blockBitmap), 0);
 
-    fstream out("disk", ios::app | ios::binary); // write the file on the disk
-
-    // write block
-    Block block;
-    strcpy(block.text, str.c_str());
-    out.write(reinterpret_cast<char *>(&block), sizeof(Block));
-    int block_pos = static_cast<int>(out.tellp()); // get current position of the block on the disk
-
-    // initialize inode
-    Inode inode;
-    initialize_inode(inode);
-
-    int offset = inode_lookup();
-
-    out.seekp(offset * sizeof(Inode));
-
-    for (int i = 0; i < 100; i++)
+    // Initialize inode bit map
+    iNodeBitmap im;
+    for (int i = 0; i < TOTAL_INODE_NUM; ++i)
     {
-        if (inode.block_pointers[i] == -1)
+        im.imap[i] = '0';
+    }
+    write_to_disk(im, sizeof(iNodeBitmap), 1);
+    // Initialize inodes;
+    for (int i = 0; i < TOTAL_INODE_NUM; ++i)
+    {
+        inodeArray[i] = Inode();
+        inodeArray[i].block_count = 3;
+        inodeArray[i].uid = 0;
+        inodeArray[i].gid = 0;
+        inodeArray[i].indirect_block_address = -1;
+
+        // Set the entire Mode array to 0
+        for (int j = 0; j < 12; ++j)
         {
-            inode.block_pointers[i] = block_pos; // put the position in the inode's block_pointer
+            inodeArray[i].Mode[j] = 0;
+        }
+
+        // Set the entire creation_time, modified_time, and read_time arrays to 0
+        for (int j = 0; j < 14; ++j)
+        {
+            inodeArray[i].creation_time[j] = 0;
+            inodeArray[i].modified_time[j] = 0;
+            inodeArray[i].read_time[j] = 0;
+        }
+
+        // Set indirect_block_address and direct_block_pointers to an appropriate value (0)
+        inodeArray[i].indirect_block_address = -1;
+        for (int j = 0; j < 12; ++j)
+        {
+            inodeArray[i].direct_block_pointers[j] = 0;
         }
     }
 
-    out.write(reinterpret_cast<char *>(&inode), sizeof(Inode)); // write the inode
+    // Write the inodes to disk
+    pFile = fopen("disk", "r+b");
+    fseek(pFile, 2 * BLOCK_SIZE, SEEK_SET);
+    int len = sizeof(inodeArray);
+    char inode_buff[len];
+    memset(inode_buff, 0, len);
+    memcpy(inode_buff, inodeArray, len);
+    fwrite(inode_buff, sizeof(char), len, pFile);
+
+    fclose(pFile);
+
+    // the curr_dir pointer points to the root directory during fs initialization
 }
 
-void FileSystem::read_from_disk(std::string str)
+template <typename T>
+void FileSystem::write_to_disk(T x, int len, int blockNum)
 {
-    ifstream in("disk", ios::binary); // read file from disk
+    // set buffer
+    char buffer[len];
 
-    // Read block bitmap
-    in.read(reinterpret_cast<char *>(block_bitmap), 10 * sizeof(int));
+    FILE *pFile = fopen("disk", "r+b");
 
-    // Read inode bitmap
-    in.read(reinterpret_cast<char *>(inode_bitmap), 10 * sizeof(int));
+    // setting buff as same byte size as node structure and fill with 0
+    memset(buffer, 0, len);
+    // copy to test buff from test
+    memcpy(buffer, &x, sizeof(x));
 
-    // Read inodes
-    for (int i = 0; i < 10; i++)
+    // get starting of file move file pointer to the start
+    fseek(pFile, blockNum * BLOCK_SIZE, SEEK_SET);
+    // write the test node structure into start of file
+    fwrite(buffer, sizeof(char), sizeof(x), pFile);
+    fclose(pFile);
+
+    /************ Brook Hatia ***************/
+
+    // read inode bitmap
+    iNodeBitmap ibm;
+    read_disk(ibm, 1);
+
+    // update inode bitmap and return position of unused inode
+    int inode_pos = inode_lookup(ibm, true); // true = change bit from 0 to 1
+
+    // read inode at position inode_pos
+    Inode inode;
+    readInode(inode, inode_pos);
+
+    // search inode's direct_block_pointers list for unoccupied index
+    for (int i = 0; i < 12; i++)
     {
-        in.read(reinterpret_cast<char *>(&inodeList[i]), sizeof(Inode));
+        if (inode.direct_block_pointers[i] != 0)
+        {
+            inode.direct_block_pointers[i] = blockNum * BLOCK_SIZE; // add the block position
+            break;
+        }
     }
 
-    in.close();
+    // update the inode
+    updateInode(inode, inode_pos);
 
-    // Print block bitmap
-    for (int i = 0; i < 10; i++)
+    /************ end Brook Hatia ***************/
+}
+
+// Writes a structure to disk, cant write array
+template <typename T>
+int FileSystem::read_disk(T &x, int blockNum)
+{
+    // Reopen the file for reading
+    FILE *pFile = fopen("disk", "rb");
+
+    if (pFile == NULL)
     {
-        cout << block_bitmap[i];
+        perror("Error opening the file for reading");
+        return 0;
     }
 
-    cout << endl;
+    // get starting of file move file pointer to the start
+    fseek(pFile, blockNum * BLOCK_SIZE, SEEK_SET);
 
-    // Print inode bitmap
-    for (int i = 0; i < 10; i++)
+    // initialize buffer to store data
+    char read_buffer[BLOCK_SIZE];
+    // Read the data from the file into a buffer
+    fread(read_buffer, 1, BLOCK_SIZE, pFile);
+
+    // Close the file after reading
+    fclose(pFile);
+    // Copy the data from the buffer into the struct
+    memcpy(&x, read_buffer, sizeof(x));
+
+    return 1;
+}
+
+void FileSystem::readInode(Inode &i, int inodeNum)
+{
+    // Reopen the file for reading
+    FILE *pFile = fopen("disk", "rb");
+
+    // Calculate inode position in Bytes
+    // int inode_position = 2*BLOCK_SIZE + inodeNum/32*BLOCK_SIZE + inodeNum/32*128;
+    int inode_position = 2 * BLOCK_SIZE + inodeNum * 128;
+
+    // get to the correct Inode position
+    fseek(pFile, inode_position, SEEK_SET);
+
+    int len = sizeof(struct Inode);
+    // initialize buffer to store data
+    char read_buffer[len];
+    // Read the data from the file into a buffer
+    fread(read_buffer, 1, len, pFile);
+
+    // Close the file after reading
+    fclose(pFile);
+    // Copy the data from the buffer into the struct
+    memcpy(&i, read_buffer, sizeof(i));
+}
+
+void FileSystem::updateInode(Inode &i, int inodeNum)
+{
+
+    FILE *pFile = fopen("disk", "r+b");
+
+    int len = sizeof(struct Inode);
+    // set buffer
+    char buffer[len];
+    // setting buff as same byte size as node structure and fill with 0
+    memset(buffer, 0, len);
+    // copy to test buff from test
+    memcpy(buffer, &i, sizeof(i));
+
+    // Calculate inode position in Bytes
+    // int inode_position = 2*BLOCK_SIZE + inodeNum/32*BLOCK_SIZE + inodeNum/32*128;
+    int inode_position = 2 * BLOCK_SIZE + inodeNum * 128;
+    // get to the correct Inode position
+    fseek(pFile, inode_position, SEEK_SET);
+
+    // write the test node structure into start of file
+    fwrite(buffer, sizeof(char), sizeof(i), pFile);
+
+    fclose(pFile);
+}
+
+/************ Brook Hatia ***************/
+
+int FileSystem::dir_index(Directory &dir)
+{
+    int rc = -1;
+    for (int i = 0; i < 146; i++)
     {
-        cout << inode_bitmap[i];
+        if (dir.name[i] == " " && dir.inode_num[i] == 0)
+        {
+            rc = i;
+            break;
+        }
     }
 
-    cout << endl;
+    return rc;
+}
 
-    // within the inodelist
-    // search each inode's block-pointer[i]
-    // check if block.text at the ith position on disk matches with str
-    // Inode temp_inode;
-    // initialize_inode(temp_inode);
+void FileSystem::my_mkdir(std::string str)
+{
+    // initialize inode bitmap
+    iNodeBitmap ibm;
+    read_disk(ibm, 1);
 
-    // for (int i = 0; i < 10; i++)
-    // {
-    //     temp_inode = inodeList[i];
-    //     for (int j = 0; j < 100; i++)
-    //     {
-    //         if (temp_inode.block_pointers[j] != -1)
-    //         {
-    //             in.seekg(i * sizeof(Inode));
-    //             in.read(reinterpret_cast<char *>(&temp_inode), sizeof(Inode)); // Write the updated value back to the file
-    //         }
-    //     }
-    // }
+    // initialize directory
+    Directory dir;
+    initialize_dir(dir);
+
+    // set the initial values, with the directory's name and position
+    dir.name[0] = str;
+    int inodeNumber = inode_lookup(ibm, false); // false = don't change bit from 0 to 1
+    dir.inode_num[0] = 2 * BLOCK_SIZE + inodeNumber * 128;
+
+    // write directory
+    int len = sizeof(Directory);
+    write_to_disk(dir, len, inodeNumber);
+}
+
+/************ end Brook Hatia ***************/
+
+// Just for testing
+void FileSystem::ps()
+{
+    // Initialize Inode to get a inode
+    Inode test;
+    readInode(test, 20);
+    cout << test.block_count << endl;
+    cout << test.indirect_block_address << endl;
+
+    // Update the Inode and put back for testing
+    test.block_count = 300;
+    updateInode(test, 20);
+
+    // Read Inode again
+    readInode(test, 20);
+    cout << test.block_count << endl;
+    cout << test.indirect_block_address << endl;
 }
