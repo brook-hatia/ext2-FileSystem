@@ -12,13 +12,14 @@ class FileSystem
 {
 
     public:
+
         // block
         struct Block
         {
             char text[4096];
         };
 
-        // inode
+        // Size is exactly 128
         struct Inode
         {
             // meta data
@@ -35,35 +36,50 @@ class FileSystem
             int indirect_block_address;
         };
 
+        //size is exactly 256
+        struct directoryEntry{
+            char name[250];
+            int inodeNumber;
+        };
+
+        //Array of Inode
         struct Inode inodeArray[TOTAL_INODE_NUM];        
 
         struct iNodeBitmap{
-            char imap[4096];
+            char imap[1024];
         };
 
         struct blockBitmap{
             char bmap[4096];
         };
 
-        // users
-        struct User
-        {
-            std::string permission;
+        // Size is exactly 4096
+        struct directory{
+            struct directoryEntry dirEntries[16];
         };
 
+
+
+
+        //Variables
+        blockBitmap bm;
+        iNodeBitmap im;
+
+        //Functions
         FileSystem();
         ~FileSystem();
 
+
         bool check_disk();                    // check if disk exists
 
-        int inode_lookup();                   // search for free inode
+        int get_free_inode();                   // search for free inode
 
         void initialize_inode(Inode &inode);  // initialize new inode with generic values
 
-
+        void terminate_File_System();         // stores everything back to disk
         void initialize_File_System();        // initialize disk with bitmaps, and inodes
         void write_to_disk(auto x, int len, int blockNum);  // write block with text "str" on disk
-        int read_disk(auto &x, int blockNum); // read inode with pointer[0] = str from the list of inodes on the disk
+        void read_disk(auto &x, int blockNum); // read inode with pointer[0] = str from the list of inodes on the disk
         void readInode(Inode &i, int inodeNum);
         void updateInode(Inode i, int inodeNum);
         void ps(); //Just for testing
