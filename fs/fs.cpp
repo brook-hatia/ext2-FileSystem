@@ -71,6 +71,7 @@ void FileSystem::initialize_File_System()
     if ((pFile = fopen("disk", "r")))
     {
         fclose(pFile);
+        initDataBlock = 2 + TOTAL_INODE_NUM / 32;
         // Load Inode and Block Bitmap from disk
         read_disk(bm, 0);
         read_disk(im, 1);
@@ -384,7 +385,6 @@ void FileSystem::my_mkdir(string directoryName)
     // initialize inode
     Inode inode;
     int inodeNum = get_free_inode();
-    readInode(inode, inodeNum);
     initialize_inode(inode, 0, 0, BLOCK_SIZE, "0777", 1, 1, 1);
 
     // update working directory
@@ -398,28 +398,40 @@ void FileSystem::my_mkdir(string directoryName)
         }
     }
 
-    // update inode
-    int blockNum = get_free_block() * BLOCK_SIZE;
-    for (int i = 0; i < 12; i++)
-    {
-        if (inode.direct_block_pointers[i] == 0)
-        {
-            inode.direct_block_pointers[i] = blockNum;
-            break;
-        }
-    }
+    // // update inode
+    // int blockNum = get_free_block();
+    // for (int i = 0; i < 12; i++)
+    // {
+    //     if (inode.direct_block_pointers[i] == 0)
+    //     {
+    //         inode.direct_block_pointers[i] = blockNum;
+    //         break;
+    //     }
+    // }
     updateInode(inode, inodeNum);
+    directory new_dir;
+    for (int i = 0; i < 16; ++i)
+    {
+        new_dir.dirEntries[i].inodeNumber = -1;
+    }
 
     // write working directory to disk
-    write_to_disk(wd, sizeof(directory), blockNum);
+    write_to_disk(wd, sizeof(directory), initDataBlock);
+    write_to_disk(new_dir, sizeof(directory), inode.direct_block_pointers[0]);
 }
 
 void FileSystem::my_cd(string filename)
 {
+    
 }
 
 void FileSystem::my_ls()
 {
+    // does equivalent of `ls -l`
+    // format: {filetype}{permission bits} {dirEntries.size()} {owner} {root/staff?} {file size} {creation date} {irEntries[i].name}
+    // for (int i = 0; i < 16; i++){
+    //     cout <<
+    // }
 }
 
 // Just for testing
@@ -443,14 +455,14 @@ void FileSystem::ps()
     // my_mkdir("file 9");
     // my_mkdir("file 10");
 
-    // for (int i = 0; i < 16; i++)
-    // {
-    //     if (wd.dirEntries[i].inodeNumber == -1)
-    //     {
-    //         break;
-    //     }
+    for (int i = 0; i < 16; i++)
+    {
+        if (wd.dirEntries[i].inodeNumber == -1)
+        {
+            break;
+        }
 
-    //     string str(wd.dirEntries[i].name);
-    //     cout << str << endl;
-    // }
+        cout << wd.dirEntries[i].name[0] << " ";
+        cout << wd.dirEntries[i].name[1] << endl;
+    }
 }
