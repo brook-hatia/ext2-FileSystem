@@ -380,8 +380,9 @@ void FileSystem::initialize_inode(Inode &inode, int uid, int linkCount, int file
     }
 }
 
-void FileSystem::my_mkdir(string directoryName)
+int FileSystem::my_mkdir(string directoryName)
 {
+    int rc = -1;
     // initialize inode
     Inode inode;
     int inodeNum = get_free_inode();
@@ -392,6 +393,7 @@ void FileSystem::my_mkdir(string directoryName)
     {
         if (wd.dirEntries[i].inodeNumber == -1)
         {
+            rc = 1;
             wd.dirEntries[i].inodeNumber = inodeNum;              // add inode number
             strcpy(wd.dirEntries[i].name, directoryName.c_str()); // add name
             break;
@@ -418,11 +420,12 @@ void FileSystem::my_mkdir(string directoryName)
     // write working directory to disk
     write_to_disk(wd, sizeof(directory), initDataBlock);
     write_to_disk(new_dir, sizeof(directory), inode.direct_block_pointers[0]);
+
+    return rc;
 }
 
 void FileSystem::my_cd(string filename)
 {
-    
 }
 
 void FileSystem::my_ls()
@@ -444,8 +447,8 @@ void FileSystem::ps()
     // cout << test.direct_block_pointers[0] << endl;
     // cout << test2.dirEntries[0].inodeNumber << endl;
     // cout << test2.dirEntries[0].name[0] << endl;
-    my_mkdir("f1");
-    my_mkdir("f2");
+    // my_mkdir("f1");
+    // my_mkdir("f2");
     // my_mkdir("file 3");
     // my_mkdir("file 4");
     // my_mkdir("file 5");
@@ -462,7 +465,81 @@ void FileSystem::ps()
             break;
         }
 
-        cout << wd.dirEntries[i].name[0] << " ";
-        cout << wd.dirEntries[i].name[1] << endl;
+        string str(wd.dirEntries[i].name);
+        cout << str << endl;
     }
+}
+
+// call appropriate functions from prompt
+string *FileSystem::scan(char *parameter)
+{
+    string str_param(parameter);      // convert char array to string
+    string *identify = new string[3]; // string[0] = function name, string[1] and string[2] = filenames/pathnames
+    int j = 0;
+
+    for (int i = 0; i < str_param.size(); i++)
+    {
+        if (str_param[i] == ' ')
+        {
+            j++;
+        }
+
+        identify[j] += str_param[i];
+    }
+
+    return identify;
+}
+
+// identify function names from filenames/paths
+string FileSystem::identify_function(string *prompt)
+{
+    string rc;
+    if (prompt[0] == "ls")
+    {
+        // rc = my_ls();
+    }
+
+    else if (prompt[0] == "cd")
+    {
+        // rc = my_cd(prompt[1]);
+    }
+
+    else if (prompt[0] == "mkdir")
+    {
+        if (my_mkdir(prompt[1]) == -1)
+        {
+            rc = "Directory not created";
+        }
+        else
+        {
+            rc = "Directory created successfully " + prompt[1];
+        }
+    }
+
+    else if (prompt[0] == "lcp")
+    {
+        // rc = lcp(prompt[1]);
+    }
+
+    else if (prompt[0] == "Lcp")
+    {
+        // rc = Lcp(prompt[1]);
+    }
+
+    else if (prompt[0] == "shutdown")
+    {
+        // rc = shutdown();
+    }
+
+    else if (prompt[0] == "exit")
+    {
+        // rc = exit();
+    }
+
+    else
+    {
+        rc = "command not found";
+    }
+
+    return rc;
 }

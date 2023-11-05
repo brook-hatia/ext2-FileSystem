@@ -1,20 +1,112 @@
-#include "fs.h"
-#include <stdio.h>
-#include <string.h>
 #include <iostream>
-
 #include <sys/socket.h> //library for server-client communication
 #include <netinet/in.h> //for serveaddr_in which is used for IPv4
 #include <unistd.h>     //for close()
-
+#include "fs.h"
 using namespace std;
+
+// string ls()
+// {
+//     return "ls success";
+// }
+
+// string cd(std::string str)
+// {
+//     return "cd success, parameter: " + str;
+// }
+
+// string mkdir(std::string str)
+// {
+//     return "mkdir success, parameter: " + str;
+// }
+
+// string lcp(std::string str)
+// {
+//     return "lcp success, parameter: " + str;
+// }
+
+// string Lcp(std::string str)
+// {
+//     return "Lcp success, parameter: " + str;
+// }
+
+// string shutdown()
+// {
+//     return "shutdown success";
+// }
+
+// string exit()
+// {
+//     return "exit success";
+// }
+
+string *scan(char *parameter)
+{
+    string str_param(parameter); // convert char array to string
+    string *identify = new string[3];
+    int j = 0;
+
+    for (int i = 0; i < str_param.size(); i++)
+    {
+        if (str_param[i] == ' ')
+        {
+            j++;
+        }
+
+        identify[j] += str_param[i];
+    }
+
+    return identify;
+}
+
+string identify_function(string *prompt)
+{
+    string rc;
+    if (prompt[0] == "ls")
+    {
+        rc = ls();
+    }
+
+    else if (prompt[0] == "cd")
+    {
+        rc = cd(prompt[1]);
+    }
+
+    else if (prompt[0] == "mkdir")
+    {
+        rc = my_mkdir(prompt[1]);
+    }
+
+    else if (prompt[0] == "lcp")
+    {
+        rc = lcp(prompt[1]);
+    }
+
+    else if (prompt[0] == "Lcp")
+    {
+        rc = Lcp(prompt[1]);
+    }
+
+    else if (prompt[0] == "shutdown")
+    {
+        rc = shutdown();
+    }
+
+    else if (prompt[0] == "exit")
+    {
+        rc = exit();
+    }
+
+    else
+    {
+        rc = "command not found";
+    }
+
+    return rc;
+}
+
 int main()
 {
-    FileSystem fs;
-    fs.initialize_File_System();
-    // fs.ps();
-
-    // server connection
     struct sockaddr_in servaddr; // the "_in" in sockaddr_in is IPv4 socket address structure
 
     // initialize servaddr
@@ -52,14 +144,13 @@ int main()
         // char sendMsg[1024]; // allocate space for send message
 
         // scan the read message for function name, filename/path
-        string *contents = fs.scan(readMsg);
+        string *contents = scan(readMsg);
 
-        string sendMsg = fs.identify_function(contents);
+        string sendMsg = identify_function(contents);
         // getline(cin, sendMsg); // server prompt
 
-        if (sendMsg == "shutdown")
+        if (sendMsg == "exit")
         {
-            fs.terminate_File_System();
             break;
         }
 
@@ -68,5 +159,4 @@ int main()
     }
 
     close(socketfd); // close client's socket
-    return 0;
 }
