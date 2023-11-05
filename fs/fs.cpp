@@ -1,6 +1,10 @@
 #include <stdio.h>
 #include <string.h>
 #include <iostream>
+#include <string>
+#include <ctime>
+#include <chrono>
+# include <cmath>
 #include "fs.h"
 
 using namespace std;
@@ -67,6 +71,7 @@ void FileSystem::initialize_File_System(){
         // Load Inode and Block Bitmap from disk
         read_disk(bm, 0);
         read_disk(im, 1);
+        read_disk(wd, initDataBlock);
     } else {
 
         pFile = fopen ("disk", "wb");
@@ -98,9 +103,9 @@ void FileSystem::initialize_File_System(){
             im.imap[i] = '0';
         }
 
-        // Mark inode bit map for root directory
-        im.imap[0] = '1';
+
         write_to_disk(im, sizeof(iNodeBitmap), 1);
+
 
         //Initialize inodes;
         for(int i = 0; i<TOTAL_INODE_NUM; ++i){
@@ -137,8 +142,22 @@ void FileSystem::initialize_File_System(){
         memset(inode_buff, 0, len);
         memcpy(inode_buff, inodeArray, len);
         fwrite(inode_buff, sizeof(char), len, pFile);
-
         fclose(pFile);
+
+        initDataBlock = 2 + TOTAL_INODE_NUM/32;
+
+        // Initialize root directory and write to disk
+        for(int i =0; i< 16; ++i){
+            wd.dirEntries[i].inodeNumber = -1;
+        }
+
+        wd.dirEntries[0].inodeNumber = 10;
+        wd.dirEntries[0].name[0] = 'o'; 
+        Inode rootInode;
+        initialize_inode(rootInode, 0, 0, BLOCK_SIZE, "0777", 1, 1, 1);
+        updateInode(rootInode, 0);
+        write_to_disk(wd, sizeof(directory), initDataBlock);
+
     }
 }
 
@@ -217,34 +236,126 @@ int FileSystem::get_free_inode(){
     return rc;
 }
 
+// Get the first block number of free block
+int FileSystem::get_free_block(){
+    int rc = -1;
+    //Loop to find first free block
+    for(int i = 0; i<TOTAL_BLOCK_NUM; ++i){
+        if(bm.bmap[i] == '0'){
+                rc = i;
+                bm.bmap[i] = '1';
+                break;
+        } 
+    }
+    return rc;
+}
+
+// Get the first block number of the 8 consecutive free blocks 
+int FileSystem::get_eight_free_block(){
+    int rc = -1;
+    int consecutiveBlocks = 0;
+    //Loop to find * consecutive blocks
+    for(int i = 0; i<TOTAL_BLOCK_NUM; ++i){
+        if(bm.bmap[i] == '0'){
+            consecutiveBlocks++;
+            if (consecutiveBlocks == 8) {
+                //first block
+                rc = i-8;
+                //Loop to mark the blocks
+                for(i = 0; i<8; i++){
+                    bm.bmap[rc+i] = '1';
+                }
+                break;
+            }
+        } else {
+            consecutiveBlocks = 0;
+        }
+    }
+    return rc;
+}
+
+// use a inode and update its parameters accordinly
+void FileSystem::initialize_inode(Inode &inode, int uid,
+                                int linkCount, int fileSize, string mode, int creTime,
+                                 int modTime, int reTime){
+                    
+            if(uid!=-1){
+                inode.uid = uid;
+            }
+
+            if(linkCount!=-1){
+                inode.link_count = linkCount;
+            }
+
+            if(fileSize!=-1){
+                inode.file_size = fileSize;
+                // Get the number of blocks needed for the file or directory
+                int blockCount = ceil(float(fileSize)/BLOCK_SIZE);
+                inode.block_count = blockCount;
+
+                // Allocate 1 block for the file
+                inode.direct_block_pointers[0] = get_free_block();
+                // If more block needed allocate 8 more and store in direct block pointer
+                if(blockCount >1){
+                    inode.direct_block_pointers[1] = get_eight_free_block();
+                    for(int i = 2; i<9; ++i){
+                        inode.direct_block_pointers[i] = inode.direct_block_pointers[i-1]+1;
+                    }
+                    // If more block is needed
+                    if(blockCount > 9){
+                        inode.direct_block_pointers[9] = get_eight_free_block();
+                        for(int i = 10; i<13; ++i){
+                            inode.direct_block_pointers[i] = inode.direct_block_pointers[i-1]+1;
+                        }
+                        inode.indirect_block_address = get_eight_free_block();
+                        int indirectBlockAddress[1024];
+                        for(int i = 1; i<=5; ++i){
+                            indirectBlockAddress[i] = inode.direct_block_pointers[12]+i;
+                        }
+
+                        //if more blocks are needed 
+                        // Still working on it
+                        if(blockCount > 17){
+                            indirectBlockAddress;
+                        }
+                    }
+                    
+                } 
+            }
+            
+            if(mode != "-1"){
+                // Copy the string into the char array using strncpy
+                strncpy(inode.Mode, mode.c_str(), sizeof(inode.Mode) - 1);
+                inode.Mode[sizeof(inode.Mode) - 1] = '\0';
+            }
+
+            // Set the entire creation_time, modified_time, and read_time arrays
+            std::chrono::system_clock::time_point now = std::chrono::system_clock::now();
+            std::time_t currentTime = std::chrono::system_clock::to_time_t(now);
+            std::tm* localTime = std::localtime(&currentTime);
+
+            if(creTime!=-1){
+                std::strftime(inode.creation_time, sizeof(inode.creation_time), "%d%b%H:%M:%S", localTime);
+            }
+            if(reTime!=-1){
+                std::strftime(inode.read_time, sizeof(inode.read_time), "%d%b%H:%M:%S", localTime);
+            }
+            if(modTime!=-1){
+                std::strftime(inode.modified_time, sizeof(inode.modified_time), "%d%b%H:%M:%S", localTime);
+            }
+
+}
 
 //Just for testing
 void FileSystem::ps(){
-    //Initialize Inode to get a inode
+    
     Inode test;
-    readInode(test, 20);
-    cout << test.block_count << endl;
-    cout << test.indirect_block_address << endl;
-
-    //Update the Inode and put back for testing
-    test.block_count = 300;
-    updateInode(test, 20);
-    
-    //Read Inode again
-    readInode(test, 20);
-    cout << test.block_count << endl;
-    cout << test.indirect_block_address << endl;
-    
-    cout << im.imap[0] <<endl;
-    cout << bm.bmap[0] <<endl;
-    im.imap[0] = '1';
-    bm.bmap[0] = '0';
-    terminate_File_System();
-
-    cout << get_free_inode() << endl;
-    cout << "size: " << sizeof(struct directory) << endl;
-    cout << "size: " << sizeof(struct directoryEntry) << endl;
-
+    readInode(test, 0);
+    directory test2;
+    read_disk(test2, test.direct_block_pointers[0]);
+    cout << test.direct_block_pointers[0] << endl;
+    cout << test2.dirEntries[0].inodeNumber << endl;
+    cout << test2.dirEntries[0].name[0] << endl;
 }
 
 

@@ -1,6 +1,8 @@
 #ifndef fs_h
 #define fs_h
 #include <fstream>
+#include <string.h>
+using namespace std;
 
 //Datas
 #define BLOCK_SIZE 4096
@@ -59,11 +61,11 @@ class FileSystem
         };
 
 
-
-
         //Variables
-        blockBitmap bm;
-        iNodeBitmap im;
+        blockBitmap bm; //block bit map
+        iNodeBitmap im; //inode bit map
+        directory wd; //working directory
+        int initDataBlock; //first block for file data
 
         //Functions
         FileSystem();
@@ -73,9 +75,10 @@ class FileSystem
         bool check_disk();                    // check if disk exists
 
         int get_free_inode();                   // search for free inode
-
-        void initialize_inode(Inode &inode);  // initialize new inode with generic values
-
+        
+        void initialize_inode(Inode &inode, int uid, int linkCount, int fileSize, string mode, int creTime, int modTime, int reTime);  // initialize new inode with generic values
+        int get_eight_free_block(); //search for 8 free blocks
+        int get_free_block();               // search for free block
         void terminate_File_System();         // stores everything back to disk
         void initialize_File_System();        // initialize disk with bitmaps, and inodes
         void write_to_disk(auto x, int len, int blockNum);  // write block with text "str" on disk
