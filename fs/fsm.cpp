@@ -8,7 +8,7 @@ int main()
 {
     FileSystem fs;
     fs.initialize_File_System();
-    // fs.ps();
+    fs.ps();
     // fs.my_mkdir("0:0");
     return 0;
 }

@@ -1,222 +1,32 @@
 #include <stdio.h>
 #include <string.h>
 #include <iostream>
+#include <string>
+#include <ctime>
+#include <chrono>
+#include <cmath>
 #include "fs.h"
 
 using namespace std;
 
 FileSystem::FileSystem()
 {
-    /************ Brook Hatia ***************/
-
-    curr_dir = NULL;
-
-    /************ endBrook Hatia ***************/
 }
 
 FileSystem::~FileSystem()
 {
-    /************ Brook Hatia ***************/
-
-    delete curr_dir;
-
-    /************ end Brook Hatia ***************/
 }
 
-/************ Brook Hatia ***************/
-
-bool FileSystem::check_disk()
-{
-    bool rc = true;
-
-    FILE *pFile = fopen("disk", "rb");
-    if (pFile == NULL)
-    {
-        rc = false; // Disk doesn't exist
-    }
-
-    fclose(pFile);
-    return rc;
-}
-
-int FileSystem::inode_lookup(iNodeBitmap &ibm, bool change_bit)
-{
-    int rc = -1;
-
-    for (int i = 0; i < BLOCK_SIZE; i++)
-    {
-        if (ibm.imap[i] == '0')
-        {
-            rc = i;
-
-            if (change_bit)
-            {
-                ibm.imap[rc] = '1';
-            }
-
-            break;
-        }
-    }
-
-    if (change_bit)
-    {
-        write_to_disk(ibm, sizeof(iNodeBitmap), 1);
-    }
-
-    return rc;
-}
-
-// initialize Directory
-void FileSystem::initialize_dir(Directory &dir)
-{
-    for (int i = 0; i < 100; i++)
-    {
-        dir.name[i] = " ";
-        dir.inode_num[i] = 0;
-    }
-}
-
-/************ end Brook Hatia ***************/
-
-void FileSystem::initialize_File_System()
-{
-    char buffer[BLOCK_SIZE];
-    FILE *pFile = fopen("disk", "wb");
-    memset(buffer, 0, BLOCK_SIZE); // initialize null buffer
-
-    // Using buffer to initialize whole disk as NULL
-    for (int i = 0; i < TOTAL_BLOCK_NUM; ++i)
-    {
-        fwrite(buffer, 1, BLOCK_SIZE, pFile);
-    }
-
-    fclose(pFile);
-
-    // Initialize block bit map
-    blockBitmap bm;
-    for (int i = 0; i < TOTAL_BLOCK_NUM; ++i)
-    {
-        bm.bmap[i] = '0';
-    }
-    write_to_disk(bm, sizeof(blockBitmap), 0);
-
-    // Initialize inode bit map
-    iNodeBitmap im;
-    for (int i = 0; i < TOTAL_INODE_NUM; ++i)
-    {
-        im.imap[i] = '0';
-    }
-    write_to_disk(im, sizeof(iNodeBitmap), 1);
-    // Initialize inodes;
-    for (int i = 0; i < TOTAL_INODE_NUM; ++i)
-    {
-        inodeArray[i] = Inode();
-        inodeArray[i].block_count = 3;
-        inodeArray[i].uid = 0;
-        inodeArray[i].gid = 0;
-        inodeArray[i].indirect_block_address = -1;
-
-        // Set the entire Mode array to 0
-        for (int j = 0; j < 12; ++j)
-        {
-            inodeArray[i].Mode[j] = 0;
-        }
-
-        // Set the entire creation_time, modified_time, and read_time arrays to 0
-        for (int j = 0; j < 14; ++j)
-        {
-            inodeArray[i].creation_time[j] = 0;
-            inodeArray[i].modified_time[j] = 0;
-            inodeArray[i].read_time[j] = 0;
-        }
-
-        // Set indirect_block_address and direct_block_pointers to an appropriate value (0)
-        inodeArray[i].indirect_block_address = -1;
-        for (int j = 0; j < 12; ++j)
-        {
-            inodeArray[i].direct_block_pointers[j] = 0;
-        }
-    }
-
-    // Write the inodes to disk
-    pFile = fopen("disk", "r+b");
-    fseek(pFile, 2 * BLOCK_SIZE, SEEK_SET);
-    int len = sizeof(inodeArray);
-    char inode_buff[len];
-    memset(inode_buff, 0, len);
-    memcpy(inode_buff, inodeArray, len);
-    fwrite(inode_buff, sizeof(char), len, pFile);
-
-    fclose(pFile);
-
-    // the curr_dir pointer points to the root directory during fs initialization
-}
-
+// Reads data from disk and store in a structure
 template <typename T>
-void FileSystem::write_to_disk(T x, int len, int blockNum)
+void FileSystem::read_disk(T &x, int blockNum)
 {
-    // set buffer
-    char buffer[len];
-
-    FILE *pFile = fopen("disk", "r+b");
-
-    // setting buff as same byte size as node structure and fill with 0
-    memset(buffer, 0, len);
-    // copy to test buff from test
-    memcpy(buffer, &x, sizeof(x));
-
-    // get starting of file move file pointer to the start
-    fseek(pFile, blockNum * BLOCK_SIZE, SEEK_SET);
-    // write the test node structure into start of file
-    fwrite(buffer, sizeof(char), sizeof(x), pFile);
-    fclose(pFile);
-
-    /************ Brook Hatia ***************/
-
-    // read inode bitmap
-    iNodeBitmap ibm;
-    read_disk(ibm, 1);
-
-    // update inode bitmap and return position of unused inode
-    int inode_pos = inode_lookup(ibm, true); // true = change bit from 0 to 1
-
-    // read inode at position inode_pos
-    Inode inode;
-    readInode(inode, inode_pos);
-
-    // search inode's direct_block_pointers list for unoccupied index
-    for (int i = 0; i < 12; i++)
-    {
-        if (inode.direct_block_pointers[i] != 0)
-        {
-            inode.direct_block_pointers[i] = blockNum * BLOCK_SIZE; // add the block position
-            break;
-        }
-    }
-
-    // update the inode
-    updateInode(inode, inode_pos);
-
-    /************ end Brook Hatia ***************/
-}
-
-// Writes a structure to disk, cant write array
-template <typename T>
-int FileSystem::read_disk(T &x, int blockNum)
-{
-    // Reopen the file for reading
+    // Open the file for reading
     FILE *pFile = fopen("disk", "rb");
 
-    if (pFile == NULL)
-    {
-        perror("Error opening the file for reading");
-        return 0;
-    }
-
-    // get starting of file move file pointer to the start
+    // Get the first block to read from
     fseek(pFile, blockNum * BLOCK_SIZE, SEEK_SET);
-
-    // initialize buffer to store data
+    // Initialize buffer to store data
     char read_buffer[BLOCK_SIZE];
     // Read the data from the file into a buffer
     fread(read_buffer, 1, BLOCK_SIZE, pFile);
@@ -225,8 +35,141 @@ int FileSystem::read_disk(T &x, int blockNum)
     fclose(pFile);
     // Copy the data from the buffer into the struct
     memcpy(&x, read_buffer, sizeof(x));
+}
 
-    return 1;
+// Writes a structure to disk, cant write array
+template <typename T>
+void FileSystem::write_to_disk(T x, int len, int blockNum)
+{
+
+    // Open File for updating
+    FILE *pFile = fopen("disk", "r+b");
+
+    // Initialize buffer to store data
+    char buffer[len];
+
+    // Setting buff as same byte size as node structure and fill with 0
+    memset(buffer, 0, len);
+    // Copy the data from the struct into the buff
+    memcpy(buffer, &x, len);
+
+    // get starting of file move file pointer to the start
+    fseek(pFile, blockNum * BLOCK_SIZE, SEEK_SET);
+    // write the structure into disk
+    fwrite(buffer, sizeof(char), len, pFile);
+
+    fclose(pFile);
+}
+
+// Initializes the File System
+void FileSystem::initialize_File_System()
+{
+    // Instance Variables
+    FILE *pFile;
+
+    // Check if Disk Already exists if not initialize the disk
+    if ((pFile = fopen("disk", "r")))
+    {
+        fclose(pFile);
+        // Load Inode and Block Bitmap from disk
+        read_disk(bm, 0);
+        read_disk(im, 1);
+        read_disk(wd, initDataBlock);
+    }
+
+    else
+    {
+        pFile = fopen("disk", "wb");
+
+        // initialize null buffer
+        char buffer[BLOCK_SIZE];
+        memset(buffer, 0, BLOCK_SIZE);
+
+        // Using buffer to initialize whole disk as NULL
+        for (int i = 0; i < TOTAL_BLOCK_NUM; ++i)
+        {
+            fwrite(buffer, 1, BLOCK_SIZE, pFile);
+        }
+
+        fclose(pFile);
+
+        // Initialize block bit map and write it to disk
+        for (int i = 0; i < TOTAL_BLOCK_NUM; ++i)
+        {
+            bm.bmap[i] = '0';
+        }
+
+        // Mark block used by the bit maps and inode
+        for (int i = 0; i < 2 + TOTAL_INODE_NUM / 32; ++i)
+        {
+            bm.bmap[i] = '1';
+        }
+        write_to_disk(bm, sizeof(blockBitmap), 0);
+
+        // Initialize inode bit map and write it to disk
+        for (int i = 0; i < TOTAL_INODE_NUM; ++i)
+        {
+            im.imap[i] = '0';
+        }
+
+        write_to_disk(im, sizeof(iNodeBitmap), 1);
+
+        // Initialize inodes;
+        for (int i = 0; i < TOTAL_INODE_NUM; ++i)
+        {
+            inodeArray[i] = Inode();
+            inodeArray[i].block_count = 0;
+            inodeArray[i].uid = 0;
+            inodeArray[i].gid = 0;
+            inodeArray[i].indirect_block_address = -1;
+
+            // Set the entire Mode array to 0
+            for (int j = 0; j < 12; ++j)
+            {
+                inodeArray[i].Mode[j] = 0;
+            }
+
+            // Set the entire creation_time, modified_time, and read_time arrays to 0
+            for (int j = 0; j < 14; ++j)
+            {
+                inodeArray[i].creation_time[j] = 0;
+                inodeArray[i].modified_time[j] = 0;
+                inodeArray[i].read_time[j] = 0;
+            }
+
+            // Set indirect_block_address and direct_block_pointers to an appropriate value (0)
+            inodeArray[i].indirect_block_address = -1;
+            for (int j = 0; j < 12; ++j)
+            {
+                inodeArray[i].direct_block_pointers[j] = 0;
+            }
+        }
+
+        // Write the inodes to disk
+        pFile = fopen("disk", "r+b");
+        fseek(pFile, 2 * BLOCK_SIZE, SEEK_SET);
+        int len = sizeof(inodeArray);
+        char inode_buff[len];
+        memset(inode_buff, 0, len);
+        memcpy(inode_buff, inodeArray, len);
+        fwrite(inode_buff, sizeof(char), len, pFile);
+        fclose(pFile);
+
+        initDataBlock = 2 + TOTAL_INODE_NUM / 32;
+
+        // Initialize root directory and write to disk
+        for (int i = 0; i < 16; ++i)
+        {
+            wd.dirEntries[i].inodeNumber = -1;
+        }
+
+        // wd.dirEntries[0].inodeNumber = 10;
+        // wd.dirEntries[0].name[0] = 'o';
+        Inode rootInode;
+        initialize_inode(rootInode, 0, 0, BLOCK_SIZE, "0777", 1, 1, 1);
+        updateInode(rootInode, 0);
+        write_to_disk(wd, sizeof(directory), initDataBlock);
+    }
 }
 
 void FileSystem::readInode(Inode &i, int inodeNum)
@@ -253,7 +196,8 @@ void FileSystem::readInode(Inode &i, int inodeNum)
     memcpy(&i, read_buffer, sizeof(i));
 }
 
-void FileSystem::updateInode(Inode &i, int inodeNum)
+// Update a inode
+void FileSystem::updateInode(Inode i, int inodeNum)
 {
 
     FILE *pFile = fopen("disk", "r+b");
@@ -278,16 +222,26 @@ void FileSystem::updateInode(Inode &i, int inodeNum)
     fclose(pFile);
 }
 
-/************ Brook Hatia ***************/
+// When File System Terminate stores everything back to disk
+void FileSystem::terminate_File_System()
+{
 
-int FileSystem::dir_index(Directory &dir)
+    write_to_disk(bm, sizeof(blockBitmap), 0);
+    write_to_disk(im, sizeof(iNodeBitmap), 1);
+}
+
+// Gets a free inode and its number and mark bitmap
+int FileSystem::get_free_inode()
 {
     int rc = -1;
-    for (int i = 0; i < 146; i++)
+
+    // Loop through bitmap to find free inode
+    for (int i = 0; i < TOTAL_INODE_NUM; i++)
     {
-        if (dir.name[i] == " " && dir.inode_num[i] == 0)
+        if (im.imap[i] == '0')
         {
             rc = i;
+            im.imap[rc] = '1';
             break;
         }
     }
@@ -295,43 +249,208 @@ int FileSystem::dir_index(Directory &dir)
     return rc;
 }
 
-void FileSystem::my_mkdir(std::string str)
+// Get the first block number of free block
+int FileSystem::get_free_block()
 {
-    // initialize inode bitmap
-    iNodeBitmap ibm;
-    read_disk(ibm, 1);
-
-    // initialize directory
-    Directory dir;
-    initialize_dir(dir);
-
-    // set the initial values, with the directory's name and position
-    dir.name[0] = str;
-    int inodeNumber = inode_lookup(ibm, false); // false = don't change bit from 0 to 1
-    dir.inode_num[0] = 2 * BLOCK_SIZE + inodeNumber * 128;
-
-    // write directory
-    int len = sizeof(Directory);
-    write_to_disk(dir, len, inodeNumber);
+    int rc = -1;
+    // Loop to find first free block
+    for (int i = 0; i < TOTAL_BLOCK_NUM; ++i)
+    {
+        if (bm.bmap[i] == '0')
+        {
+            rc = i;
+            bm.bmap[i] = '1';
+            break;
+        }
+    }
+    return rc;
 }
 
-/************ end Brook Hatia ***************/
+// Get the first block number of the 8 consecutive free blocks
+int FileSystem::get_eight_free_block()
+{
+    int rc = -1;
+    int consecutiveBlocks = 0;
+
+    // Loop to find * consecutive blocks
+    for (int i = 0; i < TOTAL_BLOCK_NUM; ++i)
+    {
+        if (bm.bmap[i] == '0')
+        {
+            consecutiveBlocks++;
+            if (consecutiveBlocks == 8)
+            {
+                // first block
+                rc = i - 8;
+                // Loop to mark the blocks
+                for (i = 0; i < 8; i++)
+                {
+                    bm.bmap[rc + i] = '1';
+                }
+                break;
+            }
+        }
+        else
+        {
+            consecutiveBlocks = 0;
+        }
+    }
+    return rc;
+}
+
+// use a inode and update its parameters accordingly
+void FileSystem::initialize_inode(Inode &inode, int uid, int linkCount, int fileSize, string mode, int creTime, int modTime, int reTime)
+{
+    if (uid != -1)
+    {
+        inode.uid = uid;
+    }
+
+    if (linkCount != -1)
+    {
+        inode.link_count = linkCount;
+    }
+
+    if (fileSize != -1)
+    {
+        inode.file_size = fileSize;
+        // Get the number of blocks needed for the file or directory
+        int blockCount = ceil(float(fileSize) / BLOCK_SIZE);
+        inode.block_count = blockCount;
+
+        // Allocate 1 block for the file
+        inode.direct_block_pointers[0] = get_free_block();
+        // If more block needed allocate 8 more and store in direct block pointer
+        if (blockCount > 1)
+        {
+            inode.direct_block_pointers[1] = get_eight_free_block();
+            for (int i = 2; i < 9; ++i)
+            {
+                inode.direct_block_pointers[i] = inode.direct_block_pointers[i - 1] + 1;
+            }
+            // If more block is needed
+            if (blockCount > 9)
+            {
+                inode.direct_block_pointers[9] = get_eight_free_block();
+                for (int i = 10; i < 13; ++i)
+                {
+                    inode.direct_block_pointers[i] = inode.direct_block_pointers[i - 1] + 1;
+                }
+                inode.indirect_block_address = get_eight_free_block();
+                int indirectBlockAddress[1024];
+                for (int i = 1; i <= 5; ++i)
+                {
+                    indirectBlockAddress[i] = inode.direct_block_pointers[12] + i;
+                }
+
+                // if more blocks are needed
+                //  Still working on it
+                if (blockCount > 17)
+                {
+                    indirectBlockAddress;
+                }
+            }
+        }
+    }
+
+    if (mode != "-1")
+    {
+        // Copy the string into the char array using strncpy
+        strncpy(inode.Mode, mode.c_str(), sizeof(inode.Mode) - 1);
+        inode.Mode[sizeof(inode.Mode) - 1] = '\0';
+    }
+
+    // Set the entire creation_time, modified_time, and read_time arrays
+    std::chrono::system_clock::time_point now = std::chrono::system_clock::now();
+    std::time_t currentTime = std::chrono::system_clock::to_time_t(now);
+    std::tm *localTime = std::localtime(&currentTime);
+
+    if (creTime != -1)
+    {
+        std::strftime(inode.creation_time, sizeof(inode.creation_time), "%d%b%H:%M:%S", localTime);
+    }
+    if (reTime != -1)
+    {
+        std::strftime(inode.read_time, sizeof(inode.read_time), "%d%b%H:%M:%S", localTime);
+    }
+    if (modTime != -1)
+    {
+        std::strftime(inode.modified_time, sizeof(inode.modified_time), "%d%b%H:%M:%S", localTime);
+    }
+}
+
+void FileSystem::my_mkdir(string directoryName)
+{
+    // initialize inode
+    Inode inode;
+    int inodeNum = get_free_inode();
+    readInode(inode, inodeNum);
+    initialize_inode(inode, 0, 0, BLOCK_SIZE, "0777", 1, 1, 1);
+
+    // update working directory
+    for (int i = 0; i < 16; i++)
+    {
+        if (wd.dirEntries[i].inodeNumber == -1)
+        {
+            wd.dirEntries[i].inodeNumber = inodeNum;              // add inode number
+            strcpy(wd.dirEntries[i].name, directoryName.c_str()); // add name
+            break;
+        }
+    }
+
+    // update inode
+    int blockNum = get_free_block() * BLOCK_SIZE;
+    for (int i = 0; i < 12; i++)
+    {
+        if (inode.direct_block_pointers[i] == 0)
+        {
+            inode.direct_block_pointers[i] = blockNum;
+            break;
+        }
+    }
+    updateInode(inode, inodeNum);
+
+    // write working directory to disk
+    write_to_disk(wd, sizeof(directory), blockNum);
+}
+
+void FileSystem::my_cd(string filename)
+{
+}
+
+void FileSystem::my_ls()
+{
+}
 
 // Just for testing
 void FileSystem::ps()
 {
-    // Initialize Inode to get a inode
-    Inode test;
-    readInode(test, 20);
-    cout << test.block_count << endl;
-    cout << test.indirect_block_address << endl;
+    // Inode test;
+    // readInode(test, 0);
+    // directory test2;
+    // read_disk(test2, test.direct_block_pointers[0]);
+    // cout << test.direct_block_pointers[0] << endl;
+    // cout << test2.dirEntries[0].inodeNumber << endl;
+    // cout << test2.dirEntries[0].name[0] << endl;
+    my_mkdir("f1");
+    my_mkdir("f2");
+    // my_mkdir("file 3");
+    // my_mkdir("file 4");
+    // my_mkdir("file 5");
+    // my_mkdir("file 6");
+    // my_mkdir("file 7");
+    // my_mkdir("file 8");
+    // my_mkdir("file 9");
+    // my_mkdir("file 10");
 
-    // Update the Inode and put back for testing
-    test.block_count = 300;
-    updateInode(test, 20);
+    // for (int i = 0; i < 16; i++)
+    // {
+    //     if (wd.dirEntries[i].inodeNumber == -1)
+    //     {
+    //         break;
+    //     }
 
-    // Read Inode again
-    readInode(test, 20);
-    cout << test.block_count << endl;
-    cout << test.indirect_block_address << endl;
+    //     string str(wd.dirEntries[i].name);
+    //     cout << str << endl;
+    // }
 }

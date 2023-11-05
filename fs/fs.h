@@ -1,6 +1,8 @@
 #ifndef fs_h
 #define fs_h
 #include <fstream>
+#include <string.h>
+using namespace std;
 
 // Data
 #define BLOCK_SIZE 4096
@@ -11,23 +13,13 @@ class FileSystem
 {
 
 public:
-    struct iNodeBitmap
-    {
-        char imap[4096];
-    };
-
-    struct blockBitmap
-    {
-        char bmap[4096];
-    };
-
     // block
     struct Block
     {
         char text[4096];
     };
 
-    // inode
+    // Size is exactly 128
     struct Inode
     {
         // meta data
@@ -44,59 +36,58 @@ public:
         int indirect_block_address;
     };
 
+    // size is exactly 256
+    struct directoryEntry
+    {
+        char name[250];
+        int inodeNumber;
+    };
+
+    // Size is exactly 4096
+    struct directory
+    {
+        struct directoryEntry dirEntries[16];
+    };
+
+    // Array of Inode
     struct Inode inodeArray[TOTAL_INODE_NUM];
-
-    /************ Brook Hatia ***************/
-    struct Directory
+    struct iNodeBitmap
     {
-        std::string name[146];
-        int inode_num[146];
+        char imap[1024];
+    };
+    struct blockBitmap
+    {
+        char bmap[4096];
     };
 
-    /************ end Brook Hatia ***************/
+    // Variables
+    blockBitmap bm;    // block bit map
+    iNodeBitmap im;    // inode bit map
+    directory wd;      // working directory
+    int initDataBlock; // first block for file data
 
-    // users
-    struct User
-    {
-        std::string permission;
-    };
-
-    /************ Brook Hatia ***************/
-
-    struct Directory *curr_dir;
-
-    /************ end Brook Hatia ***************/
-
+    // Functions
     FileSystem();
     ~FileSystem();
 
-    /************ Brook Hatia ***************/
-
     bool check_disk(); // check if disk exists
 
-    int inode_lookup(iNodeBitmap &ibm, bool change_bit); // search for free inode
+    int get_free_inode(); // search for free inode
 
-    /************ end Brook Hatia ***************/
-
-    void initialize_inode(Inode &inode); // initialize new inode with generic values
-
-    void initialize_File_System(); // initialize disk with bitmaps, and inodes
-
-    void initialize_dir(Directory &dir); // initialize directory
+    void initialize_inode(Inode &inode, int uid, int linkCount, int fileSize, string mode, int creTime, int modTime, int reTime); // initialize new inode with generic values
+    int get_eight_free_block();                                                                                                   // search for 8 free blocks
+    int get_free_block();                                                                                                         // search for free block
+    void terminate_File_System();                                                                                                 // stores everything back to disk
+    void initialize_File_System();                                                                                                // initialize disk with bitmaps, and inodes
     template <typename T>
     void write_to_disk(T x, int len, int blockNum); // write block with text "str" on disk
     template <typename T>
-    int read_disk(T &x, int blockNum); // read inode with pointer[0] = str from the list of inodes on the disk
+    void read_disk(T &x, int blockNum); // read inode with pointer[0] = str from the list of inodes on the disk
     void readInode(Inode &i, int inodeNum);
-    void updateInode(Inode &i, int inodeNum);
-
-    /************ Brook Hatia ***************/
-
-    void my_mkdir(std::string str);
-    int dir_index(Directory &dir); // returns index to be used to store names and inode_nums
-
-    /************ end Brook Hatia ***************/
-
+    void updateInode(Inode i, int inodeNum);
+    void my_mkdir(string directoryName);
+    void my_cd(string directoryName);
+    void my_ls();
     void ps(); // Just for testing
 };
 
