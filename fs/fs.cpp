@@ -387,24 +387,30 @@ void FileSystem::my_mkdir(string directoryName)
     readInode(inode, inodeNum);
     initialize_inode(inode, 0, 0, BLOCK_SIZE, "0777", 1, 1, 1);
 
-    // update inode
-    updateInode(inode, inodeNum);
-
-    // write directory to disk
-    int index = 0;
+    // update working directory
     for (int i = 0; i < 16; i++)
     {
         if (wd.dirEntries[i].inodeNumber == -1)
         {
-            index = i;
+            wd.dirEntries[i].inodeNumber = inodeNum;              // add inode number
+            strcpy(wd.dirEntries[i].name, directoryName.c_str()); // add name
             break;
         }
     }
-    strncpy(wd.dirEntries[index].name, directoryName.c_str(), sizeof(wd.dirEntries[index].name) - 1);
 
-    // get free block
+    // update inode
     int blockNum = get_free_block() * BLOCK_SIZE;
+    for (int i = 0; i < 12; i++)
+    {
+        if (inode.direct_block_pointers[i] == 0)
+        {
+            inode.direct_block_pointers[i] = blockNum;
+            break;
+        }
+    }
+    updateInode(inode, inodeNum);
 
+    // write working directory to disk
     write_to_disk(wd, sizeof(directory), blockNum);
 }
 
@@ -447,8 +453,4 @@ void FileSystem::ps()
     //     string str(wd.dirEntries[i].name);
     //     cout << str << endl;
     // }
-    cout << wd.dirEntries[0].name[0];
-    cout << wd.dirEntries[0].name[1] << '\n';
-    cout << wd.dirEntries[1].name[0];
-    cout << wd.dirEntries[1].name[1];
 }
