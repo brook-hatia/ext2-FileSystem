@@ -87,6 +87,7 @@ public:
     void updateInode(Inode i, int inodeNum);
     void my_mkdir(string directoryName);
     void my_cd(string directoryName);
+    void my_ls();
     void ps(); // Just for testing
 };
 

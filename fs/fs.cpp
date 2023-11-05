@@ -51,12 +51,12 @@ void FileSystem::write_to_disk(T x, int len, int blockNum)
     // Setting buff as same byte size as node structure and fill with 0
     memset(buffer, 0, len);
     // Copy the data from the struct into the buff
-    memcpy(buffer, &x, sizeof(x));
+    memcpy(buffer, &x, len);
 
     // get starting of file move file pointer to the start
     fseek(pFile, blockNum * BLOCK_SIZE, SEEK_SET);
     // write the structure into disk
-    fwrite(buffer, sizeof(char), sizeof(x), pFile);
+    fwrite(buffer, sizeof(char), len, pFile);
 
     fclose(pFile);
 }
@@ -400,15 +400,19 @@ void FileSystem::my_mkdir(string directoryName)
             break;
         }
     }
+    strncpy(wd.dirEntries[index].name, directoryName.c_str(), sizeof(wd.dirEntries[index].name) - 1);
 
-    wd.dirEntries[index].inodeNumber = inodeNum;
+    // get free block
+    int blockNum = get_free_block() * BLOCK_SIZE;
 
-    strcpy(wd.dirEntries[index].name, directoryName.c_str());
-
-    write_to_disk(wd, sizeof(directory), initDataBlock);
+    write_to_disk(wd, sizeof(directory), blockNum);
 }
 
-void FileSystem::my_cd(string parameter)
+void FileSystem::my_cd(string filename)
+{
+}
+
+void FileSystem::my_ls()
 {
 }
 
@@ -422,8 +426,8 @@ void FileSystem::ps()
     // cout << test.direct_block_pointers[0] << endl;
     // cout << test2.dirEntries[0].inodeNumber << endl;
     // cout << test2.dirEntries[0].name[0] << endl;
-    // my_mkdir("file 1");
-    // my_mkdir("file 2");
+    my_mkdir("f1");
+    my_mkdir("f2");
     // my_mkdir("file 3");
     // my_mkdir("file 4");
     // my_mkdir("file 5");
@@ -433,14 +437,18 @@ void FileSystem::ps()
     // my_mkdir("file 9");
     // my_mkdir("file 10");
 
-    for (int i = 0; i < 16; i++)
-    {
-        if (wd.dirEntries[i].inodeNumber == -1)
-        {
-            break;
-        }
+    // for (int i = 0; i < 16; i++)
+    // {
+    //     if (wd.dirEntries[i].inodeNumber == -1)
+    //     {
+    //         break;
+    //     }
 
-        string str(wd.dirEntries[i].name);
-        cout << str << endl;
-    }
+    //     string str(wd.dirEntries[i].name);
+    //     cout << str << endl;
+    // }
+    cout << wd.dirEntries[0].name[0];
+    cout << wd.dirEntries[0].name[1] << '\n';
+    cout << wd.dirEntries[1].name[0];
+    cout << wd.dirEntries[1].name[1];
 }

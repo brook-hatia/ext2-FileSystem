@@ -1,23 +1,29 @@
 #include <iostream>
 #include <ctime>
 #include "inode.h"
+#include <fstream>
+#include <string>
 using namespace std;
 
 inode::inode()
 {
     // meta data
     string Mode = "";
-    int inode_num = 0;
+    int block_count = 0;
     int link_count = 0;
     int uid = 0;
     int gid = 0;
     int file_size = 0;
-    time_t creation_time = chrono::system_clock::to_time_t(chrono::system_clock::now()); // ctime(&creation_time) to output time
-    time_t modified_time = chrono::system_clock::to_time_t(chrono::system_clock::now());
-    time_t read_time = chrono::system_clock::to_time_t(chrono::system_clock::now());
-    //
+    std::string creation_time = "";
+    std::string modified_time = "";
+    std::string read_time = "";
 
-    this->block_pointers = new int[12]; // direct pointers
+    this->block_pointers = new int[12];
+    for (int i = 0; i < 12; i++)
+    {
+        block_pointers[i] = -1; // direct pointers initialized to -1(invalid position) because 0 is a valid position
+    }
+
     this->single_indirect = new int *[12];
     for (int i = 0; i < 12; i++)
     {
@@ -82,137 +88,46 @@ inode::~inode()
     }
 }
 
-inodeList::inodeList(int size)
+inodeList::inodeList()
 {
-    this->bm = new int[size * size];
-
-    this->bitmap = new int *[size];
-    for (int i = 0; i < size; i++)
-    {
-        this->bitmap[i] = new int[size];
-    }
-
-    this->inodes = new inode *[size];
-    for (int i = 0; i < size; i++)
-    {
-        this->inodes[i] = new inode();
-    }
+    this->bitmap = new int[32 * 32];
 }
 
 inodeList::~inodeList()
 {
-    // destruct bitmap at every level
-    for (int i = 0; i < 32; i++)
-    {
-        delete[] this->bitmap[i];
-    }
-
-    // destruct inodes at every level
-    for (int i = 0; i < 32; i++)
-    {
-        delete[] this->inodes[i];
-    }
+    // destruct bitmap
+    delete[] this->bitmap;
 }
 
-int inodeList::free_inode_lookup()
+// search free bit, return its index, and change the bit to a 1
+int inodeList::inode_lookup()
 {
-    int rc = 0;
-    for (int i = 0; i < 32 * 32; i++)
+    int rc = -1;
+
+    fstream file("disk", ios::in | ios::out); // read/write on disk
+    if (!file.is_open())
     {
-        if (bm[i] == 0)
+        cout << "Couldn't open file";
+    }
+    else
+    {
+        // read back the inode bitmap from disk
+        int temp_bitmap[1024] = {0};
+        file.read((char *)&temp_bitmap, sizeof(temp_bitmap));
+
+        // look for a free bit (bit = 0)
+        for (int i = 0; i < 1024; i++)
         {
-            rc = i;
-            break;
-        }
-    }
-
-    return rc;
-}
-
-void inodeList::create_inode(inode *new_inode)
-{
-    int rc = free_inode_lookup();
-    int row = rc / 32;
-    int column = rc % 32;
-    if (rc == -1)
-    {
-        cout << "All inodes are occupied" << endl;
-        return;
-    }
-
-    inodes[row][column] = *new_inode;
-    bm[rc] = 1;
-}
-
-inode *inodeList::Search_inode_from_table(int num)
-{
-    inode *rc = NULL;
-
-    for (int i = 0; i < 32; i++)
-    {
-        for (int j = 0; j < 32; j++)
-        {
-            if (inodes[i][j].inode_num == num)
+            if (temp_bitmap[i] == 0)
             {
-                rc = &inodes[i][j];
+                rc = i;
+                int data = 1;
+                file.seekp(i * sizeof(int));
+                file.write((char *)&temp_bitmap, sizeof(temp_bitmap));
                 break;
             }
         }
     }
 
     return rc;
-}
-
-int main()
-{
-    inode *node1 = new inode();
-    node1->Mode = "file 1";
-    node1->inode_num = 1;
-
-    inodeList *it = new inodeList(32);
-
-    it->create_inode(node1);
-    // for (int i = 0; i < 32; i++)
-    // {
-    //     for (int j = 0; j < 32; j++)
-    //     {
-    //         cout << it->bitmap[i][j];
-    //     }
-    //     cout << endl;
-    // }
-    // int i = 0;
-    // while (i < 32 * 32)
-    // {
-    //     cout << it->bm[i];
-
-    //     if (i != 0 && i % 32 == 0)
-    //     {
-    //         cout << endl;
-    //     }
-    //     i++;
-    // }
-
-    inode *node2 = new inode();
-    node2->Mode = "file 2";
-    node2->inode_num = 2;
-    it->create_inode(node2);
-
-    // cout << "\n"
-    //      << endl;
-    // i = 0;
-    // while (i < 32 * 32)
-    // {
-    //     cout << it->bm[i];
-
-    //     if (i != 0 && i % 32 == 0)
-    //     {
-    //         cout << endl;
-    //     }
-    //     i++;
-    // }
-
-    // cout << endl;
-
-    inode *wanted = it->Search_inode_from_table(2);
-    cout << wanted->Mode << endl;
 }
