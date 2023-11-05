@@ -71,7 +71,7 @@ void FileSystem::initialize_File_System(){
         // Load Inode and Block Bitmap from disk
         read_disk(bm, 0);
         read_disk(im, 1);
-        read_disk(wd, initDataBlock);
+        read_disk(wd, 2*BLOCK_SIZE + TOTAL_INODE_NUM/32);
     } else {
 
         pFile = fopen ("disk", "wb");
@@ -314,9 +314,19 @@ void FileSystem::initialize_inode(Inode &inode, int uid,
                         }
 
                         //if more blocks are needed 
-                        // Still working on it
                         if(blockCount > 17){
-                            indirectBlockAddress;
+                            int flag = 6;
+                            //Loop to allocate more blocks when needed
+                            //!! Neeed condition where inidrectArray is full;
+                            while(blockCount-17 > 0 ){ 
+                                indirectBlockAddress[flag] = get_eight_free_block();
+                                blockCount-8;
+                                for(int i = 0; i<7; ++i){
+                                    flag++;
+                                    indirectBlockAddress[flag] = indirectBlockAddress[flag-1]+1;
+                                }
+                            }
+
                         }
                     }
                     
