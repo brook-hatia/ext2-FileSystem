@@ -5,16 +5,6 @@
 #include <unistd.h>     //for close()
 using namespace std;
 
-//scan prompt and check format
-int check_prompt(std::string str)
-{
-    int rc = -1;
-
-            
-
-    return rc;
-}
-
 int main()
 {
     struct sockaddr_in servaddr; // the "_in" in sockaddr_in is IPv4 socket address structure
@@ -47,7 +37,7 @@ int main()
 
         // string str = sendMsg; // convert character array to string
 
-        if (sendMsg == "exit") // if client types "exit" terminate connection with server
+        if (sendMsg == "shutdown") // if client types "exit" terminate connection with server
         {
             break;
         }
