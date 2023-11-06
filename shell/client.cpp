@@ -38,7 +38,7 @@ int main()
 
         // string str = sendMsg; // convert character array to string
 
-        if (sendMsg == "shutdown"  || sendMsg == "exit") // if client types "exit" terminate connection with server
+        if (sendMsg == "shutdown") // if client types "exit" terminate connection with server
         {
             break;
         }

@@ -117,6 +117,7 @@ void FileSystem::initialize_File_System(){
         write_to_disk(im, sizeof(iNodeBitmap), 1);
 
         cwd= "/";
+
         //Initialize inodes;
         for(int i = 0; i<TOTAL_INODE_NUM; ++i){
             inodeArray[i] = Inode();
@@ -155,7 +156,7 @@ void FileSystem::initialize_File_System(){
         fclose(pFile);
 
         initDataBlock = 2 + TOTAL_INODE_NUM/32;
-
+        currentDirectoryBlock = initDataBlock;
         // Initialize root directory and write to disk
         for(int i =0; i< 16; ++i){
             wd.dirEntries[i].inodeNumber = -1;
@@ -426,14 +427,14 @@ int FileSystem::my_cd(string directoryName){
         components.erase(components.begin());
 
         directory temp = rd;
-
+        string tempcwd = "/";
         //loop through all the names starting from root
         for (const string& comp : components) {
                 for(int i =0; i< 16; ++i){
                     if(temp.dirEntries[i].name==comp){
                         nameFound = 1;
                         //Set working directory to that
-                        cwd+=comp + "/";
+                        tempcwd+=comp + "/";
                         currentDirectoryBlock = get_directory_block(temp, temp.dirEntries[i].inodeNumber);
                         break;
                     }
@@ -450,17 +451,18 @@ int FileSystem::my_cd(string directoryName){
         //Set working directory to it if name is found
         if(!nameFound){
             wd = temp;
+            cwd = tempcwd;
         }
 
     } else {
         atRoot = 0;
         directory temp = wd;
-
+        string tempcwd = cwd;
         //loop through all the names
         for (const string& comp : components) {
                 for(int i =0; i< 16; ++i){
                     if(temp.dirEntries[i].name==comp){
-                        cwd+=comp + "/";
+                        tempcwd+=comp + "/";
                         nameFound = 1;
                         currentDirectoryBlock = get_directory_block(temp, temp.dirEntries[i].inodeNumber);
                         break;
@@ -479,6 +481,7 @@ int FileSystem::my_cd(string directoryName){
         //Set working directory to it if name is found
         if(!nameFound){
             wd = temp;
+            cwd = tempcwd;
         }
     }
 
@@ -708,6 +711,7 @@ string FileSystem::identify_function(string *prompt)
             wd = rd;
             atRoot = 1;
             rc = "cd to root";
+            currentDirectoryBlock=initDataBlock;
             cwd="/";
         }else{
             if (my_cd(prompt[1]) == -1){
