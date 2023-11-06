@@ -492,17 +492,99 @@ int FileSystem::get_directory_block(directory &dir, int inodeNum){
     return block_number;
 }
 
-string FileSystem::my_ls(){
-    string outPut;
-    for(int i =0; i<16;++i){
-         if(wd.dirEntries[i].inodeNumber!=-1){
-            Inode inode;
-            readInode(inode, wd.dirEntries[i].inodeNumber);
-            outPut += "Name: ";
-            
-         }       
-    }
+string FileSystem::my_ls()
+{
+    string outPut = "";
+    int flag = 1;
+    // does equivalent of `ls -l`
+    // format: {filetype}{permission bits} {dirEntries.size()} {owner} {root/staff?} {file size} {creation date} {dirEntries[i].name}
+    for (int i = 0; i < 16; i++)
+    {
+        if (wd.dirEntries[i].inodeNumber == -1)
+        {
+            break;
+        }
+        flag = 0;
+        Inode new_inode;
+        readInode(new_inode, wd.dirEntries[i].inodeNumber);
 
+        // process the mode. 0777
+
+        char file_type;
+        if (new_inode.Mode[0] == '0')
+        {
+            file_type = 'd';
+        }
+        else
+        {
+            file_type = '-';
+        }
+
+        string permission_bits;
+
+        string temp(new_inode.Mode);
+        for (int i = 1; i < temp.size(); i++)
+        {
+            if (temp[i] == '0')
+            {
+                permission_bits += "----";
+            }
+            if (temp[i] == '1')
+            {
+                permission_bits += "--x-";
+            }
+            if (temp[i] == '2')
+            {
+                permission_bits += "-w--";
+            }
+
+            if (temp[i] == '3')
+            {
+                permission_bits += "-wx-";
+            }
+            if (temp[i] == '4')
+            {
+                permission_bits += "r---";
+            }
+            if (temp[i] == '5')
+            {
+                permission_bits += "r-x-";
+            }
+            if (temp[i] == '6')
+            {
+                permission_bits += "rw--";
+            }
+            if (temp[i] == '7')
+            {
+                permission_bits += "rwx-";
+            }
+        }
+
+        // read block
+        directory new_dir;
+        read_disk(new_dir, new_inode.direct_block_pointers[0]);
+        int dir_entries_count = 0;
+
+        //Loop to get number of file in subdirectory
+        for (int j = 0; j < 16; j++){
+            if (new_dir.dirEntries[j].inodeNumber == -1){
+                break;
+                i++;
+            }
+        }
+        string owner = "0:0";
+        string owner_class = "root";
+        int file_size = new_inode.file_size;
+        string file_creation_date = new_inode.creation_time;
+
+        string dir_name = wd.dirEntries[i].name;
+        outPut +=  file_type + permission_bits + " ";
+        outPut += dir_entries_count + " " + owner + " " + owner_class + " " + file_creation_date
+                 + " " + dir_name + "\n";
+    }
+    if(flag){
+        outPut += "nothing here";
+    }
     return outPut;
 }
 
@@ -523,9 +605,9 @@ void FileSystem::ps(){
     // my_cd("f1");
     // my_mkdir("f2");
 
-    my_cd("f1");
-    my_cd("f2");
-    cout << wd.dirEntries[0].name;
+    my_mkdir("f1");
+    my_mkdir("f2");
+    my_ls();
     terminate_File_System();
 }
 
@@ -615,7 +697,7 @@ string FileSystem::identify_function(string *prompt)
     string rc;
     if (prompt[0] == "ls")
     {
-        // rc = my_ls();
+        rc = my_ls();
     }
 
     else if (prompt[0] == "cd")
