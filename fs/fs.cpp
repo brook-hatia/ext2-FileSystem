@@ -380,8 +380,9 @@ void FileSystem::initialize_inode(Inode &inode, int uid, int linkCount, int file
     }
 }
 
-void FileSystem::my_mkdir(string directoryName)
+int FileSystem::my_mkdir(string directoryName)
 {
+    int rc = -1;
     // initialize inode
     Inode inode;
     int inodeNum = get_free_inode();
@@ -392,22 +393,12 @@ void FileSystem::my_mkdir(string directoryName)
     {
         if (wd.dirEntries[i].inodeNumber == -1)
         {
+            rc = 1;
             wd.dirEntries[i].inodeNumber = inodeNum;              // add inode number
             strcpy(wd.dirEntries[i].name, directoryName.c_str()); // add name
             break;
         }
     }
-
-    // // update inode
-    // int blockNum = get_free_block();
-    // for (int i = 0; i < 12; i++)
-    // {
-    //     if (inode.direct_block_pointers[i] == 0)
-    //     {
-    //         inode.direct_block_pointers[i] = blockNum;
-    //         break;
-    //     }
-    // }
     updateInode(inode, inodeNum);
     directory new_dir;
     for (int i = 0; i < 16; ++i)
@@ -415,23 +406,103 @@ void FileSystem::my_mkdir(string directoryName)
         new_dir.dirEntries[i].inodeNumber = -1;
     }
 
-    // write working directory to disk
+    // write working directory to disk2
     write_to_disk(wd, sizeof(directory), initDataBlock);
     write_to_disk(new_dir, sizeof(directory), inode.direct_block_pointers[0]);
+
+    return rc;
 }
 
 void FileSystem::my_cd(string filename)
 {
-    
 }
 
 void FileSystem::my_ls()
 {
     // does equivalent of `ls -l`
-    // format: {filetype}{permission bits} {dirEntries.size()} {owner} {root/staff?} {file size} {creation date} {irEntries[i].name}
-    // for (int i = 0; i < 16; i++){
-    //     cout <<
-    // }
+    // format: {filetype}{permission bits} {dirEntries.size()} {owner} {root/staff?} {file size} {creation date} {dirEntries[i].name}
+    for (int i = 0; i < 16; i++)
+    {
+        if (wd.dirEntries[i].inodeNumber == -1)
+        {
+            break;
+        }
+        Inode new_inode;
+        readInode(new_inode, wd.dirEntries[i].inodeNumber);
+
+        // process the mode. 0777
+
+        char file_type;
+        if (new_inode.Mode[0] == '0')
+        {
+            file_type = 'd';
+        }
+        else
+        {
+            file_type = '-';
+        }
+
+        string permission_bits;
+
+        string temp(new_inode.Mode);
+        for (int i = 1; i < temp.size(); i++)
+        {
+            if (temp[i] == '0')
+            {
+                permission_bits += "----";
+            }
+            if (temp[i] == '1')
+            {
+                permission_bits += "--x-";
+            }
+            if (temp[i] == '2')
+            {
+                permission_bits += "-w--";
+            }
+
+            if (temp[i] == '3')
+            {
+                permission_bits += "-wx-";
+            }
+            if (temp[i] == '4')
+            {
+                permission_bits += "r---";
+            }
+            if (temp[i] == '5')
+            {
+                permission_bits += "r-x-";
+            }
+            if (temp[i] == '6')
+            {
+                permission_bits += "rw--";
+            }
+            if (temp[i] == '7')
+            {
+                permission_bits += "rwx-";
+            }
+        }
+
+        // read block
+        directory new_dir;
+        read_disk(new_dir, new_inode.direct_block_pointers[0]);
+
+        int dir_entries_count = sizeof(new_dir.dirEntries);
+        string owner = "0:0";
+        string owner_class = "root";
+        int file_size = new_inode.file_size;
+        string file_creation_date = new_inode.creation_time;
+        for (int j = 0; j < 16; j++)
+        {
+            if (new_dir.dirEntries[j].inodeNumber == -1)
+            {
+                break;
+            }
+
+            string dir_name = new_dir.dirEntries[j].name;
+            cout << file_type << permission_bits << " " << dir_entries_count << " " << owner << " " << owner_class << " " << file_creation_date
+                 << " " << dir_name << endl;
+        }
+    }
 }
 
 // Just for testing
@@ -446,6 +517,7 @@ void FileSystem::ps()
     // cout << test2.dirEntries[0].name[0] << endl;
     my_mkdir("f1");
     my_mkdir("f2");
+    my_ls();
     // my_mkdir("file 3");
     // my_mkdir("file 4");
     // my_mkdir("file 5");
@@ -462,7 +534,81 @@ void FileSystem::ps()
             break;
         }
 
-        cout << wd.dirEntries[i].name[0] << " ";
-        cout << wd.dirEntries[i].name[1] << endl;
+        string str(wd.dirEntries[i].name);
+        cout << str << endl;
     }
+}
+
+// call appropriate functions from prompt
+string *FileSystem::scan(char *parameter)
+{
+    string str_param(parameter);      // convert char array to string
+    string *identify = new string[3]; // string[0] = function name, string[1] and string[2] = filenames/pathnames
+    int j = 0;
+
+    for (int i = 0; i < str_param.size(); i++)
+    {
+        if (str_param[i] == ' ')
+        {
+            j++;
+        }
+
+        identify[j] += str_param[i];
+    }
+
+    return identify;
+}
+
+// identify function names from filenames/paths
+string FileSystem::identify_function(string *prompt)
+{
+    string rc;
+    if (prompt[0] == "ls")
+    {
+        // rc = my_ls();
+    }
+
+    else if (prompt[0] == "cd")
+    {
+        // rc = my_cd(prompt[1]);
+    }
+
+    else if (prompt[0] == "mkdir")
+    {
+        if (my_mkdir(prompt[1]) == -1)
+        {
+            rc = "Directory not created";
+        }
+        else
+        {
+            rc = "Directory created successfully " + prompt[1];
+        }
+    }
+
+    else if (prompt[0] == "lcp")
+    {
+        // rc = lcp(prompt[1]);
+    }
+
+    else if (prompt[0] == "Lcp")
+    {
+        // rc = Lcp(prompt[1]);
+    }
+
+    else if (prompt[0] == "shutdown")
+    {
+        // rc = shutdown();
+    }
+
+    else if (prompt[0] == "exit")
+    {
+        // rc = exit();
+    }
+
+    else
+    {
+        rc = "command not found";
+    }
+
+    return rc;
 }

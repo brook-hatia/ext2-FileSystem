@@ -85,10 +85,14 @@ public:
     void read_disk(T &x, int blockNum); // read inode with pointer[0] = str from the list of inodes on the disk
     void readInode(Inode &i, int inodeNum);
     void updateInode(Inode i, int inodeNum);
-    void my_mkdir(string directoryName);
+    int my_mkdir(string directoryName); // returns -1 if file is not created, else return 0;
     void my_cd(string directoryName);
     void my_ls();
-    void ps(); // Just for testing
+
+    //////////
+    string *scan(char *parameter);            // identify function names from filenames/paths
+    string identify_function(string *prompt); // call appropriate functions from prompt
+    void ps();                                // Just for testing
 };
 
 #endif
