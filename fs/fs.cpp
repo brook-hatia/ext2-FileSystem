@@ -81,6 +81,7 @@ void FileSystem::initialize_File_System(){
         read_disk(wd, initDataBlock);
         atRoot= 1;
         currentDirectoryBlock = initDataBlock;
+        cwd= "/";
     } else {
         atRoot = 1;
         pFile = fopen ("disk", "wb");
@@ -115,7 +116,7 @@ void FileSystem::initialize_File_System(){
 
         write_to_disk(im, sizeof(iNodeBitmap), 1);
 
-
+        cwd= "/";
         //Initialize inodes;
         for(int i = 0; i<TOTAL_INODE_NUM; ++i){
             inodeArray[i] = Inode();
@@ -432,6 +433,7 @@ int FileSystem::my_cd(string directoryName){
                     if(temp.dirEntries[i].name==comp){
                         nameFound = 1;
                         //Set working directory to that
+                        cwd+=comp + "/";
                         currentDirectoryBlock = get_directory_block(temp, temp.dirEntries[i].inodeNumber);
                         break;
                     }
@@ -458,6 +460,7 @@ int FileSystem::my_cd(string directoryName){
         for (const string& comp : components) {
                 for(int i =0; i< 16; ++i){
                     if(temp.dirEntries[i].name==comp){
+                        cwd+=comp + "/";
                         nameFound = 1;
                         currentDirectoryBlock = get_directory_block(temp, temp.dirEntries[i].inodeNumber);
                         break;
@@ -578,7 +581,7 @@ string FileSystem::my_ls()
         string file_creation_date = new_inode.creation_time;
 
         string dir_name = wd.dirEntries[i].name;
-        outPut +=  file_type + permission_bits + " ";
+        outPut += file_type + permission_bits + " ";
         outPut += dir_entries_count + " " + owner + " " + owner_class + " " + file_creation_date
                  + " " + dir_name + "\n";
     }
@@ -643,18 +646,17 @@ void FileSystem::start_server(){
 
     while (true)
     {
-        char readMsg[4000];                                            // allocated space for receiving from client
+        char readMsg[4000] = {};                                            // allocated space for receiving from client
         int readfd = read(acceptfd, readMsg, (size_t)sizeof(readMsg)); // receive message from client
         cout << "\nClient: " << readMsg << endl;
 
-        cout << "Server shell: ";
 
         // char sendMsg[1024]; // allocate space for send message
 
         // scan the read message for function name, filename/path
         string *contents = scan(readMsg);
 
-        string sendMsg = identify_function(contents);
+        string sendMsg = cwd + " " +identify_function(contents);
         // getline(cin, sendMsg); // server prompt
 
         if (sendMsg == "shutdown")
@@ -701,11 +703,18 @@ string FileSystem::identify_function(string *prompt)
     }
 
     else if (prompt[0] == "cd")
-    {
-        if (my_cd(prompt[1]) == -1){
-            rc = "cd failed";
+    {   
+        if(prompt[1] == ""){
+            wd = rd;
+            atRoot = 1;
+            rc = "cd to root";
+            cwd="/";
         }else{
-            rc = "cd successful to " + prompt[1];
+            if (my_cd(prompt[1]) == -1){
+                rc = "cd failed";
+            }else{
+                rc = "cd successful to " + prompt[1];
+            }
         }
     }
 

@@ -27,9 +27,10 @@ int main()
     }
     cout << "connection successful" << endl;
 
+
     while (true)
     {
-        cout << "Client shell: ";
+        cout << "->";
 
         // char sendMsg[1024]; // allocate space for send message
         string sendMsg;
@@ -45,7 +46,7 @@ int main()
         int writefd = write(socketfd, sendMsg.c_str(), (size_t)sendMsg.size()); // send message to server
         // cout << "\nwrite successful" << sendMsg;
 
-        char readMsg[4000]; // allocated space for receiving from server
+        char readMsg[4000]={}; // allocated space for receiving from server
         string s = (string)readMsg;
         int readfd = read(socketfd, readMsg, (size_t)sizeof(readMsg)); // receive message from server
         cout << "\nServer: " << readMsg << "\n";                       // read message from server

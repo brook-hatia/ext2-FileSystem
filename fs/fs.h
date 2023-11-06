@@ -67,6 +67,7 @@ class FileSystem
 
         directory wd; //working directory
         directory rd; //root directory
+        string cwd;
         
         struct directory directoryTable[10]; //Table recording the opened directories
 
