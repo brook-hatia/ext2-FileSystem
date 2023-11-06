@@ -5,6 +5,8 @@
 #include <ctime>
 #include <chrono>
 # include <cmath>
+#include <vector>
+#include <sstream>
 #include "fs.h"
 
 using namespace std;
@@ -68,10 +70,15 @@ void FileSystem::initialize_File_System(){
     // Check if Disk Already exists if not initialize the disk
     if ((pFile = fopen ("disk", "r"))){
         fclose(pFile);
+        initDataBlock = 2*BLOCK_SIZE + TOTAL_INODE_NUM/32;
         // Load Inode and Block Bitmap from disk
         read_disk(bm, 0);
         read_disk(im, 1);
-        read_disk(wd, 2*BLOCK_SIZE + TOTAL_INODE_NUM/32);
+        // Get Root directory and working directory
+        read_disk(rd, initDataBlock);
+        read_disk(wd, initDataBlock);
+        atRoot= 1;
+        currentDirectoryBlock = initDataBlock;
     } else {
 
         pFile = fopen ("disk", "wb");
@@ -356,16 +363,183 @@ void FileSystem::initialize_inode(Inode &inode, int uid,
 
 }
 
+// Create a directory
+void FileSystem::my_mkdir(string directoryName)
+{
+    // initialize inode
+    Inode inode;
+    int inodeNum = get_free_inode();
+    initialize_inode(inode, 0, 0, BLOCK_SIZE, "0777", 1, 1, 1);
+
+    // update working directory
+    for (int i = 0; i < 16; i++)
+    {
+        if (wd.dirEntries[i].inodeNumber == -1)
+        {
+            wd.dirEntries[i].inodeNumber = inodeNum;              // add inode number
+            strcpy(wd.dirEntries[i].name, directoryName.c_str()); // add name
+            break;
+        } 
+    }
+
+    updateInode(inode, inodeNum);
+    directory new_dir;
+    for (int i = 0; i < 16; ++i)
+    {
+        new_dir.dirEntries[i].inodeNumber = -1;
+    }
+
+    if(atRoot){
+        // write working directory to disk
+        write_to_disk(wd, sizeof(directory), initDataBlock);
+    } else {
+        //write working directory to disk in the correct block
+        write_to_disk(wd, sizeof(directory), currentDirectoryBlock);   
+    }
+
+    write_to_disk(new_dir, sizeof(directory), inode.direct_block_pointers[0]);
+}
+
+int FileSystem::my_cd(string directoryName){
+
+    int rc = 1;
+    int nameFound = 0;
+
+    //Parse the directory name
+    istringstream ss(directoryName);
+    string component;
+    vector<string> components;
+    while (std::getline(ss, component, '/')) {
+        components.push_back(component);
+    }
+
+    //check if is absolute path
+    if (directoryName[0] == '/') {
+        //Remove the first empty element in the vector
+        components.erase(components.begin());
+
+        directory temp = rd;
+
+        //loop through all the names starting from root
+        for (const string& comp : components) {
+                for(int i =0; i< 16; ++i){
+                    if(temp.dirEntries[i].name==comp){
+                        nameFound = 1;
+                        //Set working directory to that
+                        currentDirectoryBlock = get_directory_block(temp, temp.dirEntries[i].inodeNumber);
+                        break;
+                    }
+                }
+                //If name not found break
+                if(!nameFound){
+                    rc = -1;
+                    nameFound=1;    // to mark difference of found
+                    break;
+                }
+                // Restart nameFound for next directory
+                nameFound = 0;
+        }
+        //Set working directory to it if name is found
+        if(!nameFound){
+            wd = temp;
+        }
+
+    } else {
+
+        directory temp = wd;
+
+        //loop through all the names
+        for (const string& comp : components) {
+                for(int i =0; i< 16; ++i){
+                    if(temp.dirEntries[i].name==comp){
+                        nameFound = 1;
+                        currentDirectoryBlock = get_directory_block(temp, temp.dirEntries[i].inodeNumber);
+                        break;
+                    }
+                }
+                //If name not found break
+                if(!nameFound){
+                    rc = -1;
+                    nameFound=1;    // to mark difference of found
+                    break;
+                }
+                // Restart nameFound for next directory
+                nameFound = 0;
+        }
+
+        //Set working directory to it if name is found
+        if(!nameFound){
+            wd = temp;
+        }
+    }
+
+    return rc;
+
+}
+
+//Gets the directory and returns block number
+int FileSystem::get_directory_block(directory &dir, int inodeNum){
+    Inode inode;
+    readInode(inode, inodeNum);
+    int block_number = inode.direct_block_pointers[0];
+    read_disk(dir, block_number);
+    return block_number;
+}
+
+string FileSystem::my_ls(){
+    string outPut;
+    for(int i =0; i<16;++i){
+         if(wd.dirEntries[i].inodeNumber!=-1){
+            Inode inode;
+            readInode(inode, wd.dirEntries[i].inodeNumber);
+            outPut += "Name: ";
+            
+         }       
+    }
+
+    return outPut;
+}
+
+
 //Just for testing
 void FileSystem::ps(){
     
-    Inode test;
-    readInode(test, 0);
-    directory test2;
-    read_disk(test2, test.direct_block_pointers[0]);
-    cout << test.direct_block_pointers[0] << endl;
-    cout << test2.dirEntries[0].inodeNumber << endl;
-    cout << test2.dirEntries[0].name[0] << endl;
+    // Inode test;
+    // readInode(test, 0);
+    // directory test2;
+    // read_disk(test2, test.direct_block_pointers[0]);
+    // cout << test.direct_block_pointers[0] << endl;
+    // cout << test2.dirEntries[0].inodeNumber << endl;
+    // cout << test2.dirEntries[0].name[0] << endl;
+
+     string path = "/file.txt/test"; // Example path
+
+    // Split the path into components using '/' as the delimiter
+    istringstream ss(path);
+    string component;
+    vector<string> components;
+
+    while (std::getline(ss, component, '/')) {
+        components.push_back(component);
+    }
+
+    if (path[0] == '/') {
+        components.erase(components.begin());
+        // It's an absolute path starting from the root
+        cout << "Absolute Path: ";
+        for (const string& comp : components) {
+            cout << comp << endl;
+        }
+    } else {
+        // It's a relative path
+        cout << "Relative Path: ";
+        for (const string& comp : components) {
+            cout << comp << endl;
+        }
+    }
+ 
+    
+
 }
 
 

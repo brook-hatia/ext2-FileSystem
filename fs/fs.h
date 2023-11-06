@@ -64,8 +64,15 @@ class FileSystem
         //Variables
         blockBitmap bm; //block bit map
         iNodeBitmap im; //inode bit map
+
         directory wd; //working directory
+        directory rd; //root directory
+        
+        struct directory directoryTable[10]; //Table recording the opened directories
+
+        int currentDirectoryBlock; //first block of the current directory
         int initDataBlock; //first block for file data
+        int atRoot;
 
         //Functions
         FileSystem();
@@ -85,6 +92,13 @@ class FileSystem
         void read_disk(auto &x, int blockNum); // read inode with pointer[0] = str from the list of inodes on the disk
         void readInode(Inode &i, int inodeNum);
         void updateInode(Inode i, int inodeNum);
+
+        int get_directory_block(directory &dir, int inodeNum); //Gets the directory and returns block number
+
+        void my_mkdir(string directoryName);
+        int my_cd(string directoryName);
+        string my_ls();
+
         void ps(); //Just for testing
 };
 
