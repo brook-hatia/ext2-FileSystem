@@ -399,17 +399,6 @@ int FileSystem::my_mkdir(string directoryName)
             break;
         }
     }
-
-    // // update inode
-    // int blockNum = get_free_block();
-    // for (int i = 0; i < 12; i++)
-    // {
-    //     if (inode.direct_block_pointers[i] == 0)
-    //     {
-    //         inode.direct_block_pointers[i] = blockNum;
-    //         break;
-    //     }
-    // }
     updateInode(inode, inodeNum);
     directory new_dir;
     for (int i = 0; i < 16; ++i)
@@ -417,7 +406,7 @@ int FileSystem::my_mkdir(string directoryName)
         new_dir.dirEntries[i].inodeNumber = -1;
     }
 
-    // write working directory to disk
+    // write working directory to disk2
     write_to_disk(wd, sizeof(directory), initDataBlock);
     write_to_disk(new_dir, sizeof(directory), inode.direct_block_pointers[0]);
 
@@ -431,10 +420,89 @@ void FileSystem::my_cd(string filename)
 void FileSystem::my_ls()
 {
     // does equivalent of `ls -l`
-    // format: {filetype}{permission bits} {dirEntries.size()} {owner} {root/staff?} {file size} {creation date} {irEntries[i].name}
-    // for (int i = 0; i < 16; i++){
-    //     cout <<
-    // }
+    // format: {filetype}{permission bits} {dirEntries.size()} {owner} {root/staff?} {file size} {creation date} {dirEntries[i].name}
+    for (int i = 0; i < 16; i++)
+    {
+        if (wd.dirEntries[i].inodeNumber == -1)
+        {
+            break;
+        }
+        Inode new_inode;
+        readInode(new_inode, wd.dirEntries[i].inodeNumber);
+
+        // process the mode. 0777
+
+        char file_type;
+        if (new_inode.Mode[0] == '0')
+        {
+            file_type = 'd';
+        }
+        else
+        {
+            file_type = '-';
+        }
+
+        string permission_bits;
+
+        string temp(new_inode.Mode);
+        for (int i = 1; i < temp.size(); i++)
+        {
+            if (temp[i] == '0')
+            {
+                permission_bits += "----";
+            }
+            if (temp[i] == '1')
+            {
+                permission_bits += "--x-";
+            }
+            if (temp[i] == '2')
+            {
+                permission_bits += "-w--";
+            }
+
+            if (temp[i] == '3')
+            {
+                permission_bits += "-wx-";
+            }
+            if (temp[i] == '4')
+            {
+                permission_bits += "r---";
+            }
+            if (temp[i] == '5')
+            {
+                permission_bits += "r-x-";
+            }
+            if (temp[i] == '6')
+            {
+                permission_bits += "rw--";
+            }
+            if (temp[i] == '7')
+            {
+                permission_bits += "rwx-";
+            }
+        }
+
+        // read block
+        directory new_dir;
+        read_disk(new_dir, new_inode.direct_block_pointers[0]);
+
+        int dir_entries_count = sizeof(new_dir.dirEntries);
+        string owner = "0:0";
+        string owner_class = "root";
+        int file_size = new_inode.file_size;
+        string file_creation_date = new_inode.creation_time;
+        for (int j = 0; j < 16; j++)
+        {
+            if (new_dir.dirEntries[j].inodeNumber == -1)
+            {
+                break;
+            }
+
+            string dir_name = new_dir.dirEntries[j].name;
+            cout << file_type << permission_bits << " " << dir_entries_count << " " << owner << " " << owner_class << " " << file_creation_date
+                 << " " << dir_name << endl;
+        }
+    }
 }
 
 // Just for testing
@@ -447,8 +515,9 @@ void FileSystem::ps()
     // cout << test.direct_block_pointers[0] << endl;
     // cout << test2.dirEntries[0].inodeNumber << endl;
     // cout << test2.dirEntries[0].name[0] << endl;
-    // my_mkdir("f1");
-    // my_mkdir("f2");
+    my_mkdir("f1");
+    my_mkdir("f2");
+    my_ls();
     // my_mkdir("file 3");
     // my_mkdir("file 4");
     // my_mkdir("file 5");
