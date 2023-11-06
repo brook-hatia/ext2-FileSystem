@@ -95,11 +95,16 @@ class FileSystem
 
         int get_directory_block(directory &dir, int inodeNum); //Gets the directory and returns block number
 
-        void my_mkdir(string directoryName);
+        int my_mkdir(string directoryName);
         int my_cd(string directoryName);
         string my_ls();
 
         void ps(); //Just for testing
+
+        //Server side code
+        string *scan(char *parameter);            // identify function names from filenames/paths
+        string identify_function(string *prompt); // call appropriate functions from prompt
+        void start_server();
 };
 
 #endif

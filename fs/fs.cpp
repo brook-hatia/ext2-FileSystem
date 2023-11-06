@@ -7,8 +7,10 @@
 # include <cmath>
 #include <vector>
 #include <sstream>
+#include <sys/socket.h> //library for server-client communication
+#include <netinet/in.h> //for serveaddr_in which is used for IPv4
+#include <unistd.h>     //for close()
 #include "fs.h"
-
 using namespace std;
 
 FileSystem::FileSystem(){
@@ -70,7 +72,7 @@ void FileSystem::initialize_File_System(){
     // Check if Disk Already exists if not initialize the disk
     if ((pFile = fopen ("disk", "r"))){
         fclose(pFile);
-        initDataBlock = 2*BLOCK_SIZE + TOTAL_INODE_NUM/32;
+        initDataBlock = 2 + TOTAL_INODE_NUM/32;
         // Load Inode and Block Bitmap from disk
         read_disk(bm, 0);
         read_disk(im, 1);
@@ -80,7 +82,7 @@ void FileSystem::initialize_File_System(){
         atRoot= 1;
         currentDirectoryBlock = initDataBlock;
     } else {
-
+        atRoot = 1;
         pFile = fopen ("disk", "wb");
 
         // intialize null buffer
@@ -158,8 +160,6 @@ void FileSystem::initialize_File_System(){
             wd.dirEntries[i].inodeNumber = -1;
         }
 
-        wd.dirEntries[0].inodeNumber = 10;
-        wd.dirEntries[0].name[0] = 'o'; 
         Inode rootInode;
         initialize_inode(rootInode, 0, 0, BLOCK_SIZE, "0777", 1, 1, 1);
         updateInode(rootInode, 0);
@@ -364,8 +364,9 @@ void FileSystem::initialize_inode(Inode &inode, int uid,
 }
 
 // Create a directory
-void FileSystem::my_mkdir(string directoryName)
+int FileSystem::my_mkdir(string directoryName)
 {
+    int rc = -1;
     // initialize inode
     Inode inode;
     int inodeNum = get_free_inode();
@@ -376,10 +377,12 @@ void FileSystem::my_mkdir(string directoryName)
     {
         if (wd.dirEntries[i].inodeNumber == -1)
         {
+            rc = 1; 
             wd.dirEntries[i].inodeNumber = inodeNum;              // add inode number
             strcpy(wd.dirEntries[i].name, directoryName.c_str()); // add name
             break;
-        } 
+        }
+    
     }
 
     updateInode(inode, inodeNum);
@@ -398,6 +401,8 @@ void FileSystem::my_mkdir(string directoryName)
     }
 
     write_to_disk(new_dir, sizeof(directory), inode.direct_block_pointers[0]);
+
+    return rc;
 }
 
 int FileSystem::my_cd(string directoryName){
@@ -415,6 +420,7 @@ int FileSystem::my_cd(string directoryName){
 
     //check if is absolute path
     if (directoryName[0] == '/') {
+        atRoot = 0;
         //Remove the first empty element in the vector
         components.erase(components.begin());
 
@@ -445,7 +451,7 @@ int FileSystem::my_cd(string directoryName){
         }
 
     } else {
-
+        atRoot = 0;
         directory temp = wd;
 
         //loop through all the names
@@ -512,36 +518,152 @@ void FileSystem::ps(){
     // cout << test2.dirEntries[0].inodeNumber << endl;
     // cout << test2.dirEntries[0].name[0] << endl;
 
-     string path = "/file.txt/test"; // Example path
+    // my_mkdir("f1");
+    // cout << wd.dirEntries[0].name;
+    // my_cd("f1");
+    // my_mkdir("f2");
 
-    // Split the path into components using '/' as the delimiter
-    istringstream ss(path);
-    string component;
-    vector<string> components;
+    my_cd("f1");
+    my_cd("f2");
+    cout << wd.dirEntries[0].name;
+    terminate_File_System();
+}
 
-    while (std::getline(ss, component, '/')) {
-        components.push_back(component);
+//******Server Side Code*******
+
+//Starts the server
+void FileSystem::start_server(){
+     // server connection
+    struct sockaddr_in servaddr; // the "_in" in sockaddr_in is IPv4 socket address structure
+
+    // initialize servaddr
+    servaddr.sin_family = AF_INET;         // IPv4
+    servaddr.sin_port = 8080;              // port number. "host to network short"
+    servaddr.sin_addr.s_addr = INADDR_ANY; // bind to any available address
+
+    // for server we need socket(), bind(), listen(), accept(), read(), write() function calls
+
+    int socketfd = socket(AF_INET, SOCK_STREAM, 0); // create socket. AF_INET for ipv4, SOCK_STREAM for TCP connection, 0 for protocol
+
+    int bindfd = bind(socketfd, (sockaddr *)&servaddr, (socklen_t)sizeof(servaddr)); // bind to specific IP addr. servaddr is the specified IP addr, and the socket length of the servaddr in bytes
+
+    int listenfd = listen(socketfd, 1); // listen to incoming connection. 1 is the backlog of incoming message in queue
+    cout << "listening to connection ..." << endl;
+
+    socklen_t servaddrLen = sizeof(servaddr);                                          // size of servaddr in bytes
+    int acceptfd = accept(socketfd, (sockaddr *)&servaddr, (socklen_t *)&servaddrLen); // new socket after connect() is called on client side
+
+    if (socketfd == -1 || bindfd == -1 || listenfd == -1 || acceptfd == -1)
+    { // error returns -1
+        cout << "connection failed" << endl;
+    }
+    cout << "connection success" << endl;
+
+    while (true)
+    {
+        char readMsg[4000];                                            // allocated space for receiving from client
+        int readfd = read(acceptfd, readMsg, (size_t)sizeof(readMsg)); // receive message from client
+        cout << "\nClient: " << readMsg << endl;
+
+        cout << "Server shell: ";
+
+        // char sendMsg[1024]; // allocate space for send message
+
+        // scan the read message for function name, filename/path
+        string *contents = scan(readMsg);
+
+        string sendMsg = identify_function(contents);
+        // getline(cin, sendMsg); // server prompt
+
+        if (sendMsg == "shutdown")
+        {
+            terminate_File_System();
+            break;
+        }
+
+        int writefd = write(acceptfd, sendMsg.c_str(), (size_t)sendMsg.size()); // send message to client
+        // cout << "\nwrite successful" << sendMsg;
     }
 
-    if (path[0] == '/') {
-        components.erase(components.begin());
-        // It's an absolute path starting from the root
-        cout << "Absolute Path: ";
-        for (const string& comp : components) {
-            cout << comp << endl;
-        }
-    } else {
-        // It's a relative path
-        cout << "Relative Path: ";
-        for (const string& comp : components) {
-            cout << comp << endl;
-        }
-    }
- 
-    
-
+    close(socketfd); // close client's socket
 }
 
 
+// call appropriate functions from prompt
+string *FileSystem::scan(char *parameter)
+{
+    string str_param(parameter);      // convert char array to string
+    string *identify = new string[3]; // string[0] = function name, string[1] and string[2] = filenames/pathnames
+    int j = 0;
 
+    for (int i = 0; i < str_param.size(); i++)
+    {
+        if (str_param[i] == ' ')
+        {
+            j++;
+        }
+
+        identify[j] += str_param[i];
+    }
+
+    return identify;
+}
+
+// identify function names from filenames/paths
+string FileSystem::identify_function(string *prompt)
+{
+    string rc;
+    if (prompt[0] == "ls")
+    {
+        // rc = my_ls();
+    }
+
+    else if (prompt[0] == "cd")
+    {
+        if (my_cd(prompt[1]) == -1){
+            rc = "cd failed";
+        }else{
+            rc = "cd successful to " + prompt[1];
+        }
+    }
+
+    else if (prompt[0] == "mkdir")
+    {
+        if (my_mkdir(prompt[1]) == -1)
+        {
+            rc = "Directory not created";
+        }
+        else
+        {
+            rc = "Directory created successfully " + prompt[1];
+        }
+    }
+
+    else if (prompt[0] == "lcp")
+    {
+        // rc = lcp(prompt[1]);
+    }
+
+    else if (prompt[0] == "Lcp")
+    {
+        // rc = Lcp(prompt[1]);
+    }
+
+    else if (prompt[0] == "shutdown")
+    {
+        // rc = shutdown();
+    }
+
+    else if (prompt[0] == "exit")
+    {
+        // rc = exit();
+    }
+
+    else
+    {
+        rc = "command not found";
+    }
+
+    return rc;
+}
 
