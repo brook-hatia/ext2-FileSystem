@@ -724,7 +724,7 @@ string FileSystem::identify_function(string *prompt)
 
     else if (prompt[0] == "mkdir")
     {
-        if (my_mkdir(prompt[1]) == -1)
+        if (my_mkdir(prompt[1]) == "")
         {
             rc = "Directory not created";
         }
