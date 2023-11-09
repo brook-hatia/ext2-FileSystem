@@ -686,9 +686,7 @@ int FileSystem::my_rmdir(string directoryName)
     for (int i = 0; i < 16; ++i)
     {
         dir.dirEntries[i].inodeNumber = -1;
-        std::fill(std::begin(dir.dirEntries[i].name), std::end(dir.dirEntries[i].name), '\0');
     }
-    write_to_disk(dir, sizeof(directory), inode.direct_block_pointers[0]);
 
     // update block bitmap and inode bitmap
     bm.bmap[block_number] = '0';
