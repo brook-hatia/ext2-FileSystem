@@ -4,7 +4,7 @@
 #include <string.h>
 using namespace std;
 
-// Data
+// Datas
 #define BLOCK_SIZE 4096
 #define TOTAL_BLOCK_NUM 4096
 #define TOTAL_INODE_NUM 1024
@@ -43,28 +43,38 @@ public:
         int inodeNumber;
     };
 
+    // Array of Inode
+    struct Inode inodeArray[TOTAL_INODE_NUM];
+
+    struct iNodeBitmap
+    {
+        char imap[1024];
+    };
+
+    struct blockBitmap
+    {
+        char bmap[4096];
+    };
+
     // Size is exactly 4096
     struct directory
     {
         struct directoryEntry dirEntries[16];
     };
 
-    // Array of Inode
-    struct Inode inodeArray[TOTAL_INODE_NUM];
-    struct iNodeBitmap
-    {
-        char imap[1024];
-    };
-    struct blockBitmap
-    {
-        char bmap[4096];
-    };
-
     // Variables
-    blockBitmap bm;    // block bit map
-    iNodeBitmap im;    // inode bit map
-    directory wd;      // working directory
-    int initDataBlock; // first block for file data
+    blockBitmap bm; // block bit map
+    iNodeBitmap im; // inode bit map
+
+    directory wd; // working directory
+    directory rd; // root directory
+    string cwd;
+
+    struct directory directoryTable[10]; // Table recording the opened directories
+
+    int currentDirectoryBlock; // first block of the current directory
+    int initDataBlock;         // first block for file data
+    int atRoot;
 
     // Functions
     FileSystem();
@@ -85,14 +95,20 @@ public:
     void read_disk(T &x, int blockNum); // read inode with pointer[0] = str from the list of inodes on the disk
     void readInode(Inode &i, int inodeNum);
     void updateInode(Inode i, int inodeNum);
-    int my_mkdir(string directoryName); // returns -1 if file is not created, else return 0;
-    void my_cd(string directoryName);
-    void my_ls();
 
-    //////////
+    int get_directory_block(directory &dir, int inodeNum); // Gets the directory and returns block number
+
+    int my_mkdir(string directoryName);
+    int my_cd(string directoryName);
+    string my_ls();
+    int my_rmdir(string directoryName);
+
+    void ps(); // Just for testing
+
+    // Server side code
     string *scan(char *parameter);            // identify function names from filenames/paths
     string identify_function(string *prompt); // call appropriate functions from prompt
-    void ps();                                // Just for testing
+    void start_server();
 };
 
 #endif
