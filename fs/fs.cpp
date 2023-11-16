@@ -72,7 +72,7 @@ void FileSystem::initialize_File_System(){
     // Check if Disk Already exists if not initialize the disk
     if ((pFile = fopen ("disk", "r"))){
         fclose(pFile);
-        initDataBlock = 2 + TOTAL_INODE_NUM/32;
+        initDataBlock = 17 + TOTAL_INODE_NUM/32;
         // Load Inode and Block Bitmap from disk
         read_disk(bm, 0);
         read_disk(im, 1);
@@ -103,7 +103,7 @@ void FileSystem::initialize_File_System(){
         }
         
         // Mark block used by the bit maps and inode
-        for (int i = 0; i< 2+TOTAL_INODE_NUM/32; ++i){
+        for (int i = 0; i< 17+TOTAL_INODE_NUM/32; ++i){
             bm.bmap[i] = '1';
         }
         write_to_disk(bm, sizeof(blockBitmap), 0);
@@ -147,7 +147,7 @@ void FileSystem::initialize_File_System(){
 
         //Write the inodes to disk
         pFile = fopen ("disk", "r+b");
-        fseek(pFile, 2*BLOCK_SIZE, SEEK_SET);
+        fseek(pFile, 17*BLOCK_SIZE , SEEK_SET);
         int len = sizeof(inodeArray);
         char inode_buff[len];
         memset(inode_buff, 0, len);
@@ -155,7 +155,7 @@ void FileSystem::initialize_File_System(){
         fwrite(inode_buff, sizeof(char), len, pFile);
         fclose(pFile);
 
-        initDataBlock = 2 + TOTAL_INODE_NUM/32;
+        initDataBlock = 17 + TOTAL_INODE_NUM/32;
         currentDirectoryBlock = initDataBlock;
         // Initialize root directory and write to disk
         for(int i =0; i< 16; ++i){
@@ -176,7 +176,7 @@ void FileSystem::readInode(Inode &i, int inodeNum){
 
     //Calculatte inode position in Bytes
     //int inode_position = 2*BLOCK_SIZE + inodeNum/32*BLOCK_SIZE + inodeNum/32*128;
-    int inode_position = 2*BLOCK_SIZE + inodeNum*128;
+    int inode_position = 17*BLOCK_SIZE + inodeNum*128;
 
     //get to the correct Inode position
     fseek(pFile, inode_position, SEEK_SET);
@@ -209,7 +209,7 @@ void FileSystem::updateInode(Inode i, int inodeNum){
 
     //Calculatte inode position in Bytes
     //int inode_position = 2*BLOCK_SIZE + inodeNum/32*BLOCK_SIZE + inodeNum/32*128;
-    int inode_position = 2*BLOCK_SIZE + inodeNum*128;
+    int inode_position = 17*BLOCK_SIZE + inodeNum*128;
     //get to the correct Inode position
     fseek(pFile, inode_position, SEEK_SET);
 
@@ -597,24 +597,7 @@ string FileSystem::my_ls()
 
 //Just for testing
 void FileSystem::ps(){
-    
-    // Inode test;
-    // readInode(test, 0);
-    // directory test2;
-    // read_disk(test2, test.direct_block_pointers[0]);
-    // cout << test.direct_block_pointers[0] << endl;
-    // cout << test2.dirEntries[0].inodeNumber << endl;
-    // cout << test2.dirEntries[0].name[0] << endl;
 
-    // my_mkdir("f1");
-    // cout << wd.dirEntries[0].name;
-    // my_cd("f1");
-    // my_mkdir("f2");
-
-    my_mkdir("f1");
-    my_mkdir("f2");
-    my_ls();
-    terminate_File_System();
 }
 
 //******Server Side Code*******
@@ -724,13 +707,17 @@ string FileSystem::identify_function(string *prompt)
 
     else if (prompt[0] == "mkdir")
     {
-        if (my_mkdir(prompt[1]) == "")
-        {
+        if(prompt[1] == ""){
             rc = "No argument, please try again";
-        }
-        else
-        {
-            rc = "Directory created successfully " + prompt[1];
+        } else{
+            if (my_mkdir(prompt[1]) == -1)
+                {
+                    rc = "Directory not created";
+                }
+                else
+                {
+                    rc = "Directory created successfully " + prompt[1];
+            }
         }
     }
 
