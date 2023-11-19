@@ -58,6 +58,11 @@ int main()
             break;
         }
 
+        else if (sendMsg == "clear")
+        {
+            system("clear"); // clears client shell
+        }
+
         cwd = "";
 
         if (!signed_in)
