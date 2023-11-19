@@ -62,12 +62,21 @@ public:
         struct directoryEntry dirEntries[16];
     };
 
+    struct User
+    {
+        string name[6];
+        int uid[6];
+    };
+
     // Variables
     blockBitmap bm; // block bit map
     iNodeBitmap im; // inode bit map
 
     directory wd; // working directory
     directory rd; // root directory
+
+    User curr_user;
+
     string cwd;
 
     struct directory directoryTable[10]; // Table recording the opened directories
@@ -75,6 +84,7 @@ public:
     int currentDirectoryBlock; // first block of the current directory
     int initDataBlock;         // first block for file data
     int atRoot;
+    int current_user; // stores uid of signed-in user
 
     // Functions
     FileSystem();
@@ -102,6 +112,8 @@ public:
     int my_cd(string directoryName);
     string my_ls();
     int my_rmdir(string directoryName);
+    int sign_in(string name); // searches user on disk and signs-in if user exists, else return -1;
+    string who_am_i();        // returns name of signed-in user
 
     void ps(); // Just for testing
 
