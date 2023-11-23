@@ -114,7 +114,7 @@ public:
     int my_rmdir(string directoryName);
     int sign_in(string name); // searches user on disk and signs-in if user exists, else return -1;
     string who_am_i();        // returns name of signed-in user
-	void my_chown(string uName, string fName); //change owner of file 'fName' to user 'uName'
+    int my_chown(string uName, string fName); //change owner of file 'fName' to user 'uName'
 
     void ps(); // Just for testing
 
