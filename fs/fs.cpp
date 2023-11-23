@@ -10,6 +10,7 @@
 #include <sys/socket.h> //library for server-client communication
 #include <netinet/in.h> //for serveaddr_in which is used for IPv4
 #include <unistd.h>     //for close()
+#include <fstream>
 #include "fs.h"
 using namespace std;
 
@@ -45,7 +46,6 @@ void FileSystem::read_disk(T &x, int blockNum)
 template <typename T>
 void FileSystem::write_to_disk(T x, int len, int blockNum)
 {
-
     // Open File for updating
     FILE *pFile = fopen("disk", "r+b");
 
@@ -79,14 +79,14 @@ void FileSystem::initialize_File_System()
 
         // Load Inode and Block Bitmap from disk
         read_disk(bm, 0);
-        read_disk(im, 1);
+        read_disk(im, 16);
 
         // Get Root directory and working directory
         read_disk(rd, initDataBlock);
         read_disk(wd, initDataBlock);
 
         // load users
-        read_disk(curr_user, 2);
+        read_disk(curr_user, 17);
 
         atRoot = 1;
         currentDirectoryBlock = initDataBlock;
@@ -117,7 +117,7 @@ void FileSystem::initialize_File_System()
         }
 
         // Mark block used by the bit maps and inode
-        for (int i = 0; i < 17 + TOTAL_INODE_NUM / 32; ++i)
+        for (int i = 0; i < 18 + TOTAL_INODE_NUM / 32; ++i)
         {
             bm.bmap[i] = '1';
         }
@@ -129,7 +129,7 @@ void FileSystem::initialize_File_System()
             im.imap[i] = '0';
         }
 
-        write_to_disk(im, sizeof(iNodeBitmap), 1);
+        write_to_disk(im, sizeof(iNodeBitmap), 16);
 
         cwd = "/";
 
@@ -154,7 +154,7 @@ void FileSystem::initialize_File_System()
         users.name[5] = "user5";
         users.uid[5] = 105;
 
-        write_to_disk(users, sizeof(User), 2);
+        write_to_disk(users, sizeof(User), 17);
 
         // Initialize inodes;
         for (int i = 0; i < TOTAL_INODE_NUM; ++i)
@@ -219,7 +219,7 @@ void FileSystem::readInode(Inode &i, int inodeNum)
 
     // Calculate inode position in Bytes
     // int inode_position = 2*BLOCK_SIZE + inodeNum/32*BLOCK_SIZE + inodeNum/32*128;
-    int inode_position = 17 * BLOCK_SIZE + inodeNum * 128;
+    int inode_position = 18 * BLOCK_SIZE + inodeNum * 128;
 
     // get to the correct Inode position
     fseek(pFile, inode_position, SEEK_SET);
@@ -250,9 +250,9 @@ void FileSystem::updateInode(Inode i, int inodeNum)
     // copy to test buff from test
     memcpy(buffer, &i, sizeof(i));
 
-    // Calculatte inode position in Bytes
+    // Calculate inode position in Bytes
     // int inode_position = 2*BLOCK_SIZE + inodeNum/32*BLOCK_SIZE + inodeNum/32*128;
-    int inode_position = 17 * BLOCK_SIZE + inodeNum * 128;
+    int inode_position = 18 * BLOCK_SIZE + inodeNum * 128;
     // get to the correct Inode position
     fseek(pFile, inode_position, SEEK_SET);
 
@@ -266,7 +266,7 @@ void FileSystem::updateInode(Inode i, int inodeNum)
 void FileSystem::terminate_File_System()
 {
     write_to_disk(bm, sizeof(blockBitmap), 0);
-    write_to_disk(im, sizeof(iNodeBitmap), 1);
+    write_to_disk(im, sizeof(iNodeBitmap), 16);
 }
 
 // Gets a free inode and its number and mark bitmap
@@ -285,6 +285,8 @@ int FileSystem::get_free_inode()
         }
     }
 
+    terminate_File_System();
+
     return rc;
 }
 
@@ -302,6 +304,8 @@ int FileSystem::get_free_block()
             break;
         }
     }
+
+    terminate_File_System();
     return rc;
 }
 
@@ -333,10 +337,13 @@ int FileSystem::get_eight_free_block()
             consecutiveBlocks = 0;
         }
     }
+
+    terminate_File_System();
+
     return rc;
 }
 
-// use a inode and update its parameters accordinly
+// use an inode and update its parameters accordingly
 void FileSystem::initialize_inode(Inode &inode, int uid, int linkCount, int fileSize, string mode, int creTime, int modTime, int reTime)
 {
     if (uid != -1)
@@ -600,8 +607,7 @@ int FileSystem::my_rmdir(string directoryName)
 
     // reset/initialize inode
     Inode inode;
-    readInode(inode, inode_number);
-    initialize_inode(inode, 0, 0, 0, "0000", 0, 0, 0); // inode is reset
+    initialize_inode(inode, 0, 0, 0, "0000", 0, 0, 0);
     updateInode(inode, inode_number);
 
     // get block number
@@ -732,15 +738,90 @@ string FileSystem::my_ls()
     return outPut;
 }
 
+// copy a host file to the current directory in the FS
+int FileSystem::lcp(char *host_file)
+{
+    int rc = -1;
+    FILE *pFile = fopen(host_file, "r+b");
+
+    if (pFile != NULL)
+    {
+        fseek(pFile, 0, SEEK_END);
+        long len = ftell(pFile);
+        file_size = len;
+        fseek(pFile, 0, SEEK_SET);
+
+        int steps = ceil(len / 4096);
+
+        Block block;
+
+        Inode new_inode;
+        initialize_inode(new_inode, 0, 0, BLOCK_SIZE, "0777", 1, 1, 1);
+        int inode_number = get_free_inode();
+        rc = inode_number;
+
+        for (int i = 0; i < steps; i++)
+        {
+            fseek(pFile, i * BLOCK_SIZE, SEEK_SET);
+            fread(block.text, 1, BLOCK_SIZE, pFile);
+
+            int block_number = get_free_block();
+            write_to_disk(block, BLOCK_SIZE, block_number);
+
+            for (int j = 0; j < 12; j++)
+            {
+                if (new_inode.direct_block_pointers[j] == -1)
+                {
+                    new_inode.direct_block_pointers[j] = block_number;
+                    break;
+                }
+            }
+        }
+
+        fclose(pFile);
+
+        updateInode(new_inode, inode_number);
+    }
+
+    return rc;
+}
+
+// copy a FS file from the current directory to the current directory in the host system
+int FileSystem::Lcp(string fs_file)
+{
+}
+
 // Just for testing
 void FileSystem::ps()
 {
-    read_disk(curr_user, 2);
+    int inodeNum = lcp("test.txt");
 
-    for (int i = 0; i < 6; i++)
+    Inode inode;
+    initialize_inode(inode, 0, 0, BLOCK_SIZE, "0777", 1, 1, 1);
+    readInode(inode, inodeNum);
+
+    char read_buffer[file_size]; // +1 for null terminator
+
+    int blockNum = 0;
+
+    Block b;
+    for (int i = 0; i < 12; i++)
     {
-        cout << curr_user.name[i] << " " << curr_user.uid[i] << endl;
+        if (inode.direct_block_pointers[i] != -1)
+        {
+            if (blockNum == 0)
+            {
+                blockNum = inode.direct_block_pointers[i];
+            }
+
+            read_disk(b, inode.direct_block_pointers[i]);
+
+            // Copy the content of the block to read_buffer
+            memcpy(read_buffer, b.text, sizeof(b.text));
+        }
     }
+
+    cout << read_buffer;
 }
 
 //******Server Side Code*******
@@ -960,7 +1041,7 @@ int FileSystem::sign_in(string name)
     int rc = -1;
 
     // read users
-    read_disk(curr_user, 2);
+    read_disk(curr_user, 17);
 
     for (int i = 0; i < 6; i++)
     {

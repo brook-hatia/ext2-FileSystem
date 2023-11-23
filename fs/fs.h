@@ -85,6 +85,7 @@ public:
     int initDataBlock;         // first block for file data
     int atRoot;
     int current_user; // stores uid of signed-in user
+    long file_size; //size of a file to be read
 
     // Functions
     FileSystem();
@@ -105,13 +106,16 @@ public:
     void read_disk(T &x, int blockNum); // read inode with pointer[0] = str from the list of inodes on the disk
     void readInode(Inode &i, int inodeNum);
     void updateInode(Inode i, int inodeNum);
-
     int get_directory_block(directory &dir, int inodeNum); // Gets the directory and returns block number
 
+    // functions
     int my_mkdir(string directoryName);
     int my_cd(string directoryName);
     string my_ls();
     int my_rmdir(string directoryName);
+    int lcp(char *host_file);
+    int Lcp(string fs_file);
+
     int sign_in(string name); // searches user on disk and signs-in if user exists, else return -1;
     string who_am_i();        // returns name of signed-in user
 
