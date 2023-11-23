@@ -19,6 +19,8 @@ public:
         char text[4096];
     };
 
+    // struct Block blocks[10];
+
     // Size is exactly 128
     struct Inode
     {

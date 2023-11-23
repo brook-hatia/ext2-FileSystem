@@ -742,6 +742,7 @@ string FileSystem::my_ls()
 int FileSystem::lcp(char *host_file)
 {
     int rc = -1;
+
     FILE *pFile = fopen(host_file, "r+b");
 
     if (pFile != NULL)
@@ -751,36 +752,36 @@ int FileSystem::lcp(char *host_file)
         file_size = len;
         fseek(pFile, 0, SEEK_SET);
 
-        int steps = ceil(len / 4096);
+        int num_of_blocks = ceil((float)len / BLOCK_SIZE);
 
-        Block block;
+        Inode inode;
+        initialize_inode(inode, 0, 0, BLOCK_SIZE, "0777", 1, 1, 1);
+        int inodeNum = get_free_inode();
+        rc = inodeNum;
 
-        Inode new_inode;
-        initialize_inode(new_inode, 0, 0, BLOCK_SIZE, "0777", 1, 1, 1);
-        int inode_number = get_free_inode();
-        rc = inode_number;
-
-        for (int i = 0; i < steps; i++)
+        for (int i = 0; i < num_of_blocks; i++)
         {
-            fseek(pFile, i * BLOCK_SIZE, SEEK_SET);
-            fread(block.text, 1, BLOCK_SIZE, pFile);
+            // Read the file in chunks
+            char buffer[BLOCK_SIZE];
+            memset(buffer, 0, BLOCK_SIZE);
+            fread(buffer, 1, BLOCK_SIZE, pFile);
 
-            int block_number = get_free_block();
-            write_to_disk(block, BLOCK_SIZE, block_number);
+            Block block;
+            strncpy(block.text, buffer, BLOCK_SIZE);
 
-            for (int j = 0; j < 12; j++)
-            {
-                if (new_inode.direct_block_pointers[j] == -1)
-                {
-                    new_inode.direct_block_pointers[j] = block_number;
-                    break;
-                }
+            // Get a free block and write the block to disk
+            int blockNum = get_free_block();
+            write_to_disk(block, sizeof(Block), blockNum);
+
+            //save block numbers on the inode
+            if (i < 12){
+                inode.direct_block_pointers[i] = blockNum;
             }
         }
 
-        fclose(pFile);
+        updateInode(inode, inodeNum);
 
-        updateInode(new_inode, inode_number);
+        fclose(pFile);
     }
 
     return rc;
@@ -791,33 +792,28 @@ int FileSystem::Lcp(string fs_file)
 {
 }
 
-// Just for testing
+// just for testing
+// read blocks back
 void FileSystem::ps()
 {
     int inodeNum = lcp("test.txt");
 
     Inode inode;
-    initialize_inode(inode, 0, 0, BLOCK_SIZE, "0777", 1, 1, 1);
     readInode(inode, inodeNum);
 
-    char read_buffer[file_size]; // +1 for null terminator
+    char read_buffer[file_size];
+    memset(read_buffer, 0, sizeof(read_buffer)); // Initialize read_buffer
 
-    int blockNum = 0;
+    int offset = 0; // Keep track of the offset in read_buffer
 
-    Block b;
     for (int i = 0; i < 12; i++)
     {
         if (inode.direct_block_pointers[i] != -1)
         {
-            if (blockNum == 0)
-            {
-                blockNum = inode.direct_block_pointers[i];
-            }
-
-            read_disk(b, inode.direct_block_pointers[i]);
-
-            // Copy the content of the block to read_buffer
-            memcpy(read_buffer, b.text, sizeof(b.text));
+            Block block;
+            read_disk(block, inode.direct_block_pointers[i]);
+            strncat(read_buffer, block.text, BLOCK_SIZE);
+            // cout << inode.direct_block_pointers[i] << endl;
         }
     }
 
