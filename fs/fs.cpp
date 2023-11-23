@@ -666,6 +666,7 @@ string FileSystem::my_ls()
         else
         {
             file_type = '-';
+
         }
 
         string permission_bits;
@@ -739,7 +740,7 @@ string FileSystem::my_ls()
 }
 
 // copy a host file to the current directory in the FS
-int FileSystem::lcp(char *host_file)
+int FileSystem::my_lcp(char *host_file)
 {
     int rc = -1;
 
@@ -755,9 +756,25 @@ int FileSystem::lcp(char *host_file)
         int num_of_blocks = ceil((float)len / BLOCK_SIZE);
 
         Inode inode;
-        initialize_inode(inode, 0, 0, BLOCK_SIZE, "0777", 1, 1, 1);
+        initialize_inode(inode, 0, 0, BLOCK_SIZE, "1777", 1, 1, 1);
         int inodeNum = get_free_inode();
         rc = inodeNum;
+
+        int file_name_len = strlen(host_file);
+        for (int i = 0; i < 16; i++){
+            if (wd.dirEntries[i].inodeNumber == -1){
+                wd.dirEntries[i].inodeNumber = rc;
+                
+                if (file_name_len <= 250){
+                    wd.dirEntries[i].name = new char[file_name_len];
+                    strcpy(wd.dirEntries[i].name, host_file);
+                }
+                else {
+                    perror("file name exceeded 250");
+                }
+                break;
+            }
+        }
 
         for (int i = 0; i < num_of_blocks; i++)
         {
@@ -788,36 +805,14 @@ int FileSystem::lcp(char *host_file)
 }
 
 // copy a FS file from the current directory to the current directory in the host system
-int FileSystem::Lcp(string fs_file)
+int FileSystem::my_Lcp(string fs_file)
 {
 }
 
 // just for testing
-// read blocks back
 void FileSystem::ps()
 {
-    int inodeNum = lcp("test.txt");
-
-    Inode inode;
-    readInode(inode, inodeNum);
-
-    char read_buffer[file_size];
-    memset(read_buffer, 0, sizeof(read_buffer)); // Initialize read_buffer
-
-    int offset = 0; // Keep track of the offset in read_buffer
-
-    for (int i = 0; i < 12; i++)
-    {
-        if (inode.direct_block_pointers[i] != -1)
-        {
-            Block block;
-            read_disk(block, inode.direct_block_pointers[i]);
-            strncat(read_buffer, block.text, BLOCK_SIZE);
-            // cout << inode.direct_block_pointers[i] << endl;
-        }
-    }
-
-    cout << read_buffer;
+    
 }
 
 //******Server Side Code*******
@@ -919,6 +914,7 @@ string *FileSystem::scan(char *parameter)
 string FileSystem::identify_function(string *prompt)
 {
     string rc;
+
     if (prompt[0] == "ls")
     {
         rc = my_ls();
@@ -957,7 +953,7 @@ string FileSystem::identify_function(string *prompt)
         {
             if (my_mkdir(prompt[1]) == -1)
             {
-                rc = "Directory not created";
+                rc = "Directory not created" + prompt[1];
             }
             else
             {
@@ -988,6 +984,22 @@ string FileSystem::identify_function(string *prompt)
     else if (prompt[0] == "lcp")
     {
         // rc = lcp(prompt[1]);
+        if (prompt[1] == "") {
+            rc = "No argument, please try again";
+        }
+        else {
+            prompt[1] = prompt[1].substr(1);
+
+            char data[prompt[1].length()];
+            strcpy(data, prompt[1].c_str());
+            if (my_lcp(data) == -1){
+                string s(data);
+                rc = "File not found in host" + s;
+            }
+            else {
+                rc = "File successfully written on disk";
+            }
+        }
     }
 
     else if (prompt[0] == "Lcp")
