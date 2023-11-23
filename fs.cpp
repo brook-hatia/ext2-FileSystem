@@ -947,6 +947,22 @@ string FileSystem::identify_function(string *prompt)
         rc = who_am_i();
     }
 
+    else if (prompt[0] == "chown") {
+
+	if (my_chown(prompt[1], prompt[2]) == 0) {
+		rc = "File " + prompt[2] + " is now owned by " + prompt[1]; // owner of file fName successfully changed to user uName
+		
+	} else if (my_chown(prompt[1], prompt[2]) == 1) {
+		rc = "File not found"; // file does not exist in working directory
+		
+	} else if (my_chown(prompt[1], prompt[2]) == 2) {
+		rc = "User not found"; // user does not exist
+		
+	} else if (my_chown(prompt[1], prompt[2]) == 3) {
+		rc = "Permission denied"; // current user does not have permission to change the owner of specified file
+	}
+    }
+
     else
     {
         rc = "command not found";
@@ -981,7 +997,9 @@ string FileSystem::who_am_i()
     return curr_user.name[current_user];
 }
 
-void my_chown(string uName, string fName) {
+int my_chown(string uName, string fName) {
+
+	int rc; // initialize return code
 	
 	Inode* file = NULL; // initialize i-node pointer to NULL
 	int uidOld = NULL; // initialize current owner UID to NULL
@@ -1010,16 +1028,18 @@ void my_chown(string uName, string fName) {
 	if (file != NULL) {	
 		if (curr_user.uid == uidOld or curr_user.uid == 100) { // check if current user is file owner or root user
 			if (curr_user.uid != 100 and file.Mode[1] != 7) { // if current user is not root user, check if file owner does not have rwx permissions
-				std::cout << "Permission denied"; // permission denied, throw error
+				rc = 3; // permission denied, throw error
 			} else {
 				initialize_inode(file, uidNew); // update the existing inode by initializing it with the uid tied to the username parameter
+				rc = 0;
 			}
 		} else if (uidNew == NULL) { 
-			std::cout << "User not found"; // user with name uName does not exist, throw error
+			rc = 2; // user with name uName does not exist, throw error
 		} else {
-			std::cout << "Permission denied"; // permission denied, throw error
+			rc = 3; // permission denied, throw error
 		}
 	} else {
-		std::cout << "File not found"; // file with name fName does not exist, throw error
+		rc = 1; // file with name fName does not exist, throw error
 	}
+	return rc;
 }
