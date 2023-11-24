@@ -805,14 +805,48 @@ int FileSystem::my_lcp(char *host_file)
 }
 
 // copy a FS file from the current directory to the current directory in the host system
-int FileSystem::my_Lcp(string fs_file)
+int FileSystem::my_Lcp(char *fs_file)
 {
+    int rc = -1; // rc here is the inode number of fs_file
+
+    // check if fs_file exists on disk
+    for (int i = 0; i < 16; i++) {
+        if (strcmp(wd.dirEntries[i].name, fs_file) == 0) {
+            rc = wd.dirEntries[i].inodeNumber;
+            break;
+        }
+    }
+
+    if (rc != -1) {
+        string str_file_name = "export_" + string(fs_file);
+
+        FILE *pFile = fopen(str_file_name.c_str(), "a+b"); // append or create
+
+        if (pFile != NULL) {
+            Inode inode;
+            readInode(inode, rc);
+
+            for (int i = 0; i < 12; i++) {
+                if (inode.direct_block_pointers[i] != -1) {
+                    Block block;
+                    read_disk(block, inode.direct_block_pointers[i]);
+
+                    fseek(pFile, i * BLOCK_SIZE, SEEK_SET);
+                    fwrite(&block, 1, BLOCK_SIZE, pFile);
+                }
+            }
+
+            fclose(pFile);
+        }
+    }
+
+    return rc;
 }
+
 
 // just for testing
 void FileSystem::ps()
 {
-    
 }
 
 //******Server Side Code*******
@@ -1005,16 +1039,22 @@ string FileSystem::identify_function(string *prompt)
     else if (prompt[0] == "Lcp")
     {
         // rc = Lcp(prompt[1]);
-    }
+        if (prompt[1] == "") {
+            rc = "No argument, please try again";
+        }
+        else {
+            prompt[1] = prompt[1].substr(1);
 
-    else if (prompt[0] == "shutdown")
-    {
-        // rc = shutdown();
-    }
-
-    else if (prompt[0] == "exit")
-    {
-        // rc = exit();
+            char data[prompt[1].length()];
+            strcpy(data, prompt[1].c_str());
+            if (my_Lcp(data) == -1){
+                string s(data);
+                rc = "File not found in file system " + s;
+            }
+            else {
+                rc = "File successfully written to " + prompt[1];
+            }
+        }
     }
 
     else if (prompt[0] == "sign_in")

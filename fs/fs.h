@@ -122,7 +122,7 @@ public:
     string my_ls();
     int my_rmdir(string directoryName);
     int my_lcp(char *host_file);
-    int my_Lcp(string fs_file);
+    int my_Lcp(char *fs_file);
 
     int sign_in(string name); // searches user on disk and signs-in if user exists, else return -1;
     string who_am_i();        // returns name of signed-in user
