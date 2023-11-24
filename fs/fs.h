@@ -19,6 +19,8 @@ public:
         char text[4096];
     };
 
+    // struct Block blocks[10];
+
     // Size is exactly 128
     struct Inode
     {
@@ -39,7 +41,7 @@ public:
     // size is exactly 256
     struct directoryEntry
     {
-        char name[250];
+        char *name; //name must be atmost 250
         int inodeNumber;
     };
 
@@ -62,12 +64,27 @@ public:
         struct directoryEntry dirEntries[16];
     };
 
+    struct User
+    {
+        string name[6];
+        int uid[6];
+    };
+
+    struct File {
+        char *name;
+        int uid;
+        int inode_number;
+    };
+
     // Variables
     blockBitmap bm; // block bit map
     iNodeBitmap im; // inode bit map
 
     directory wd; // working directory
     directory rd; // root directory
+
+    User curr_user;
+
     string cwd;
 
     struct directory directoryTable[10]; // Table recording the opened directories
@@ -75,6 +92,8 @@ public:
     int currentDirectoryBlock; // first block of the current directory
     int initDataBlock;         // first block for file data
     int atRoot;
+    int current_user; // stores uid of signed-in user
+    long file_size; //size of a file to be read
 
     // Functions
     FileSystem();
@@ -95,13 +114,18 @@ public:
     void read_disk(T &x, int blockNum); // read inode with pointer[0] = str from the list of inodes on the disk
     void readInode(Inode &i, int inodeNum);
     void updateInode(Inode i, int inodeNum);
-
     int get_directory_block(directory &dir, int inodeNum); // Gets the directory and returns block number
 
+    // functions
     int my_mkdir(string directoryName);
     int my_cd(string directoryName);
     string my_ls();
     int my_rmdir(string directoryName);
+    int my_lcp(char *host_file);
+    int my_Lcp(char *fs_file);
+
+    int sign_in(string name); // searches user on disk and signs-in if user exists, else return -1;
+    string who_am_i();        // returns name of signed-in user
 
     void ps(); // Just for testing
 
