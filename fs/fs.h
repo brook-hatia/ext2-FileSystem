@@ -6,7 +6,7 @@ using namespace std;
 
 //Datas
 #define BLOCK_SIZE 4096
-#define TOTAL_BLOCK_NUM 4096
+#define TOTAL_BLOCK_NUM 524288
 #define TOTAL_INODE_NUM 1024
 
 
@@ -52,7 +52,7 @@ class FileSystem
         };
 
         struct blockBitmap{
-            char bmap[4096];
+            char bmap[TOTAL_BLOCK_NUM];
         };
 
         // Size is exactly 4096
