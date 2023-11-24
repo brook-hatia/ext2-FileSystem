@@ -75,7 +75,7 @@ void FileSystem::initialize_File_System(){
         initDataBlock = 17 + TOTAL_INODE_NUM/32;
         // Load Inode and Block Bitmap from disk
         read_disk(bm, 0);
-        read_disk(im, 1);
+        read_disk(im, 16);
         // Get Root directory and working directory
         read_disk(rd, initDataBlock);
         read_disk(wd, initDataBlock);
@@ -114,7 +114,7 @@ void FileSystem::initialize_File_System(){
         }
 
 
-        write_to_disk(im, sizeof(iNodeBitmap), 1);
+        write_to_disk(im, sizeof(iNodeBitmap), 16);
 
         cwd= "/";
 
@@ -224,7 +224,7 @@ void FileSystem::updateInode(Inode i, int inodeNum){
 void FileSystem::terminate_File_System(){
 
     write_to_disk(bm, sizeof(blockBitmap), 0);
-    write_to_disk(im, sizeof(iNodeBitmap), 1);
+    write_to_disk(im, sizeof(iNodeBitmap), 16);
 
 }
 
