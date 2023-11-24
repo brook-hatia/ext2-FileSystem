@@ -744,7 +744,7 @@ int FileSystem::my_lcp(char *host_file)
 {
     int rc = -1;
 
-    FILE *pFile = fopen(host_file, "rb");
+    FILE *pFile = fopen(host_file, "r+b");
 
     if (pFile != NULL)
     {
@@ -753,10 +753,7 @@ int FileSystem::my_lcp(char *host_file)
         file_size = len;
         fseek(pFile, 0, SEEK_SET);
 
-        int num_of_blocks = ceil(len / BLOCK_SIZE);
-        if (num_of_blocks < 1){
-            num_of_blocks = 1;
-        }
+        int num_of_blocks = ceil(float(len) / BLOCK_SIZE);
         
         Inode inode;
         initialize_inode(inode, 0, 0, BLOCK_SIZE, "1777", 1, 1, 1);
@@ -769,25 +766,30 @@ int FileSystem::my_lcp(char *host_file)
                 wd.dirEntries[i].inodeNumber = rc;
                 
                 if (file_name_len <= 250){
-                    wd.dirEntries[i].name = new char[file_name_len];
-                    strcpy(wd.dirEntries[i].name, host_file);
+                    wd.dirEntries[i].name = strdup(host_file);
                 }
                 else {
                     perror("file name exceeded 250");
+                    exit(1);
                 }
                 break;
             }
         }
 
+        int temp_file_sisze = file_size;
         for (int i = 0; i < num_of_blocks; i++)
         {
+            int write_size = (temp_file_sisze < BLOCK_SIZE) ? temp_file_sisze : BLOCK_SIZE;
+
             // Read the file in chunks
             char buffer[BLOCK_SIZE];
             memset(buffer, 0, BLOCK_SIZE);
-            fread(buffer, 1, BLOCK_SIZE, pFile);
+            // fseek(pFile, i * BLOCK_SIZE, SEEK_SET);
+            fread(buffer, 1, write_size, pFile);
 
             Block block;
-            strncpy(block.text, buffer, BLOCK_SIZE);
+            // strncpy(block.text, buffer, BLOCK_SIZE);
+            memcpy(block.text, buffer, BLOCK_SIZE);
 
             // Get a free block and write the block to disk
             int blockNum = get_free_block();
@@ -797,6 +799,8 @@ int FileSystem::my_lcp(char *host_file)
             if (i < 12){
                 inode.direct_block_pointers[i] = blockNum;
             }
+
+            temp_file_sisze -= write_size;
         }
 
         updateInode(inode, inodeNum);
@@ -822,21 +826,34 @@ int FileSystem::my_Lcp(char *fs_file)
 
     if (rc != -1) {
         string str_file_name = "export_" + string(fs_file);
+        // str_file_name += ".txt";
 
-        FILE *pFile = fopen(str_file_name.c_str(), "w+b");
+        FILE *pFile = fopen(str_file_name.c_str(), "a+b");
 
         Inode inode;
         readInode(inode, rc);
 
-        for (int i = 0; i < 12; i++) {
-            if (inode.direct_block_pointers[i] != -1) {
+        int steps = ceil(float(file_size)/ 4096);
+
+        for (int i = 0; i < 12 && i < steps; i++) {
+            if (inode.direct_block_pointers[i] != 0) {
                 Block block;
                 read_disk(block, inode.direct_block_pointers[i]);
 
-                fseek(pFile, i * BLOCK_SIZE, SEEK_SET);
-                fwrite(&block, 1, BLOCK_SIZE, pFile);
+                int write_size = (file_size < BLOCK_SIZE) ? file_size : BLOCK_SIZE;
+
+                // fseek(pFile, i * BLOCK_SIZE, SEEK_SET);
+                fwrite(block.text, 1, write_size, pFile);
+
+                file_size -= write_size;
+
+                // Break the loop if we have copied all the required bytes
+                if (file_size == 0) {
+                    break;
+                }
             }
         }
+
 
         fclose(pFile);
     }
@@ -848,6 +865,8 @@ int FileSystem::my_Lcp(char *fs_file)
 // just for testing
 void FileSystem::ps()
 {
+    int a = my_lcp("file.txt");
+    cout << ceil(float(file_size)/BLOCK_SIZE);
 }
 
 //******Server Side Code*******
