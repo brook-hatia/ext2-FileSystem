@@ -744,7 +744,7 @@ int FileSystem::my_lcp(char *host_file)
 {
     int rc = -1;
 
-    FILE *pFile = fopen(host_file, "r+b");
+    FILE *pFile = fopen(host_file, "rb");
 
     if (pFile != NULL)
     {
@@ -753,8 +753,11 @@ int FileSystem::my_lcp(char *host_file)
         file_size = len;
         fseek(pFile, 0, SEEK_SET);
 
-        int num_of_blocks = ceil((float)len / BLOCK_SIZE);
-
+        int num_of_blocks = ceil(len / BLOCK_SIZE);
+        if (num_of_blocks < 1){
+            num_of_blocks = 1;
+        }
+        
         Inode inode;
         initialize_inode(inode, 0, 0, BLOCK_SIZE, "1777", 1, 1, 1);
         int inodeNum = get_free_inode();
@@ -820,24 +823,22 @@ int FileSystem::my_Lcp(char *fs_file)
     if (rc != -1) {
         string str_file_name = "export_" + string(fs_file);
 
-        FILE *pFile = fopen(str_file_name.c_str(), "a+b"); // append or create
+        FILE *pFile = fopen(str_file_name.c_str(), "w+b");
 
-        if (pFile != NULL) {
-            Inode inode;
-            readInode(inode, rc);
+        Inode inode;
+        readInode(inode, rc);
 
-            for (int i = 0; i < 12; i++) {
-                if (inode.direct_block_pointers[i] != -1) {
-                    Block block;
-                    read_disk(block, inode.direct_block_pointers[i]);
+        for (int i = 0; i < 12; i++) {
+            if (inode.direct_block_pointers[i] != -1) {
+                Block block;
+                read_disk(block, inode.direct_block_pointers[i]);
 
-                    fseek(pFile, i * BLOCK_SIZE, SEEK_SET);
-                    fwrite(&block, 1, BLOCK_SIZE, pFile);
-                }
+                fseek(pFile, i * BLOCK_SIZE, SEEK_SET);
+                fwrite(&block, 1, BLOCK_SIZE, pFile);
             }
-
-            fclose(pFile);
         }
+
+        fclose(pFile);
     }
 
     return rc;
