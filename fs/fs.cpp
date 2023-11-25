@@ -861,6 +861,40 @@ int FileSystem::my_Lcp(char *fs_file)
     return rc;
 }
 
+//outputs contents of a directory/file
+string FileSystem::my_cat(string *files) {
+    string rc = "";
+
+    int len = prompt_len;
+
+    //get the inodes of the files
+    int *inodes = new int[len];
+    for (int i = 0; i < len; i++){
+        for (int j = 0; j < 16; j++){
+            if (strcmp(wd.dirEntries[j].name, files[i].c_str()) == 0) {
+                inodes[i] = wd.dirEntries[j].inodeNumber;
+                break;
+            }
+        }
+    }
+
+    // copy data of the blocks
+    Inode inode;
+    Block block;
+    for (int i = 0; i < len; i++){
+        readInode(inode, inodes[i]);
+        for (int j = 0; j < 12; j++){
+            if (inode.direct_block_pointers[j] != 0){
+                read_disk(block, inode.direct_block_pointers[j]);
+                rc += block.text;
+            }
+        }
+    }
+
+    delete[] inodes;
+
+    return rc;
+}
 
 // just for testing
 void FileSystem::ps()
@@ -878,7 +912,7 @@ void FileSystem::start_server()
     struct sockaddr_in servaddr;
 
     servaddr.sin_family = AF_INET;
-    servaddr.sin_port = htons(2005);
+    servaddr.sin_port = htons(2006);
     servaddr.sin_addr.s_addr = INADDR_ANY;
 
     int socketfd = socket(AF_INET, SOCK_STREAM, 0);
@@ -939,8 +973,30 @@ void FileSystem::start_server()
 // call appropriate functions from prompt
 string *FileSystem::scan(char *parameter)
 {
+    //only for functions that take in unlimited prompt
+    int prompt_length = 0;
     string str_param(parameter);      // convert char array to string
-    string *identify = new string[3]; // string[0] = function name, string[1] and string[2] = filenames/pathnames
+    for (int i = 0; i < str_param.length(); i++){
+        if (str_param[i] == ' '){
+            prompt_length++;
+        }
+    }
+    prompt_len = prompt_length;
+
+    // prompt_files = new string[prompt_len];
+    // int first_space = str_param.find(' ');
+    // int k = 0;
+    // for (int i = 0; i < str_param.length(); i++){
+    //     if (str_param[i] == ' '){
+    //         k++;
+    //     }
+    //     prompt_files[k] = str_param[i];
+    // }
+
+    ///////////
+
+
+    string *identify = new string[prompt_length]; // string[0] = function name, string[1] and string[2] = filenames/pathnames
     int j = 0;
 
     // user is not signed in
@@ -960,6 +1016,8 @@ string *FileSystem::scan(char *parameter)
 
         identify[j] += str_param[i];
     }
+
+    prompt_files = identify;
 
     return identify;
 }
@@ -1075,6 +1133,14 @@ string FileSystem::identify_function(string *prompt)
                 rc = "File successfully written to " + prompt[1];
             }
         }
+    }
+
+    else if (prompt[0] == "cat"){
+        //rc = cat(prompt[1] prompt[1] .... prompt[n])
+        rc = my_cat(prompt_files);
+        // for (int i = 0; i < prompt_len; i++){
+        //     rc += prompt_files[i + 1];
+        // }
     }
 
     else if (prompt[0] == "sign_in")

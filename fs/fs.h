@@ -93,7 +93,9 @@ public:
     int initDataBlock;         // first block for file data
     int atRoot;
     int current_user; // stores uid of signed-in user
-    long file_size; //size of a file to be read
+    long file_size; // size of a file to be read
+    string *prompt_files; // keeps track if more than 1 filenames/paths
+    int prompt_len;
 
     // Functions
     FileSystem();
@@ -123,6 +125,7 @@ public:
     int my_rmdir(string directoryName);
     int my_lcp(char *host_file);
     int my_Lcp(char *fs_file);
+    string my_cat(string *files);
 
     int sign_in(string name); // searches user on disk and signs-in if user exists, else return -1;
     string who_am_i();        // returns name of signed-in user
@@ -131,7 +134,7 @@ public:
 
     // Server side code
     string *scan(char *parameter);            // identify function names from filenames/paths
-    string identify_function(string *prompt); // call appropriate functions from prompt
+    string identify_function(string prompt[]); // call appropriate functions from prompt
     void start_server();
 };
 
