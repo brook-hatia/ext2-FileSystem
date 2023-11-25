@@ -20,6 +20,7 @@ FileSystem::FileSystem()
 
 FileSystem::~FileSystem()
 {
+    
 }
 
 // Reads data from disk and store in a structure
@@ -776,10 +777,13 @@ int FileSystem::my_lcp(char *host_file)
             }
         }
 
-        int temp_file_sisze = file_size;
+        // update inode's file_size attribute
+        inode.file_size = len;
+
+        int temp_file_size = file_size;
         for (int i = 0; i < num_of_blocks; i++)
         {
-            int write_size = (temp_file_sisze < BLOCK_SIZE) ? temp_file_sisze : BLOCK_SIZE;
+            int write_size = (temp_file_size < BLOCK_SIZE) ? temp_file_size : BLOCK_SIZE;
 
             // Read the file in chunks
             char buffer[BLOCK_SIZE];
@@ -800,7 +804,7 @@ int FileSystem::my_lcp(char *host_file)
                 inode.direct_block_pointers[i] = blockNum;
             }
 
-            temp_file_sisze -= write_size;
+            temp_file_size -= write_size;
         }
 
         updateInode(inode, inodeNum);
@@ -862,36 +866,44 @@ int FileSystem::my_Lcp(char *fs_file)
 }
 
 //outputs contents of a directory/file
-string FileSystem::my_cat(string *files) {
+string FileSystem::my_cat(string file) {
     string rc = "";
+    int inode_number = -1; // rc here is the inode number of fs_file
 
-    int len = prompt_len;
+    // check if fs_file exists on disk
+    const char* fs_file = file.c_str();
+    for (int i = 0; i < 16; i++) {
+        if (strcmp(wd.dirEntries[i].name, fs_file) == 0) {
+            inode_number = wd.dirEntries[i].inodeNumber;
+            break;
+        }
+    }
 
-    //get the inodes of the files
-    int *inodes = new int[len];
-    for (int i = 0; i < len; i++){
-        for (int j = 0; j < 16; j++){
-            if (strcmp(wd.dirEntries[j].name, files[i].c_str()) == 0) {
-                inodes[i] = wd.dirEntries[j].inodeNumber;
-                break;
+    if (inode_number != -1) {
+        Inode inode;
+        readInode(inode, inode_number);
+
+        int steps = ceil(float(inode.file_size)/ 4096);
+
+        // file is type directory
+        if (inode.Mode[0] == '0'){
+            rc = file + ": Is a directory";
+        }
+        else {
+            for (int i = 0; i < 12 && i < steps; i++) {
+                if (inode.direct_block_pointers[i] != 0) {
+                    Block block;
+                    read_disk(block, inode.direct_block_pointers[i]);
+
+                    rc += block.text;
+                }
             }
         }
     }
 
-    // copy data of the blocks
-    Inode inode;
-    Block block;
-    for (int i = 0; i < len; i++){
-        readInode(inode, inodes[i]);
-        for (int j = 0; j < 12; j++){
-            if (inode.direct_block_pointers[j] != 0){
-                read_disk(block, inode.direct_block_pointers[j]);
-                rc += block.text;
-            }
-        }
+    else {
+        rc = file + " not found";
     }
-
-    delete[] inodes;
 
     return rc;
 }
@@ -974,14 +986,14 @@ void FileSystem::start_server()
 string *FileSystem::scan(char *parameter)
 {
     //only for functions that take in unlimited prompt
-    int prompt_length = 0;
+    // int prompt_length = 0;
     string str_param(parameter);      // convert char array to string
-    for (int i = 0; i < str_param.length(); i++){
-        if (str_param[i] == ' '){
-            prompt_length++;
-        }
-    }
-    prompt_len = prompt_length;
+    // for (int i = 0; i < str_param.length(); i++){
+    //     if (str_param[i] == ' '){
+    //         prompt_length++;
+    //     }
+    // }
+    // prompt_len = prompt_length;
 
     // prompt_files = new string[prompt_len];
     // int first_space = str_param.find(' ');
@@ -996,7 +1008,7 @@ string *FileSystem::scan(char *parameter)
     ///////////
 
 
-    string *identify = new string[prompt_length]; // string[0] = function name, string[1] and string[2] = filenames/pathnames
+    string *identify = new string[3]; // string[0] = function name, string[1] and string[2] = filenames/pathnames
     int j = 0;
 
     // user is not signed in
@@ -1017,7 +1029,7 @@ string *FileSystem::scan(char *parameter)
         identify[j] += str_param[i];
     }
 
-    prompt_files = identify;
+    // prompt_files = identify;
 
     return identify;
 }
@@ -1136,11 +1148,9 @@ string FileSystem::identify_function(string *prompt)
     }
 
     else if (prompt[0] == "cat"){
-        //rc = cat(prompt[1] prompt[1] .... prompt[n])
-        rc = my_cat(prompt_files);
-        // for (int i = 0; i < prompt_len; i++){
-        //     rc += prompt_files[i + 1];
-        // }
+        //rc = cat(prompt[1]);
+        prompt[1] = prompt[1].substr(1);
+        rc = my_cat(prompt[1]);
     }
 
     else if (prompt[0] == "sign_in")
