@@ -970,6 +970,7 @@ int FileSystem::my_rm(string file) {
         if (strcmp(wd.dirEntries[i].name, fs_file) == 0) {
             rc = wd.dirEntries[i].inodeNumber;
             pos_in_wd = i;
+            break;
         }
     }
 
@@ -990,12 +991,67 @@ int FileSystem::my_rm(string file) {
             }
         }
 
-        // reset inode
+        // update the inode data
         strcpy(wd.dirEntries[pos_in_wd].name, ""); // remove name
         wd.dirEntries[pos_in_wd].inodeNumber = -1; // reset inode_number
         initialize_inode(inode, 0, 0, 0, "", 0, 0, 0); // reset inode
         updateInode(inode, rc);
         im.imap[rc] = '0'; // reset inode bitmap
+    }
+
+    return rc;
+}
+
+// copy files
+int FileSystem::my_cp(string src_file, string dst_file) {
+    int rc = -1;
+
+    //check if the file exists in the FS
+    const char* fs_file = src_file.c_str();
+    for (int i = 0; i < 16; i++){
+        if (strcmp(wd.dirEntries[i].name, fs_file) == 0) {
+            rc = wd.dirEntries[i].inodeNumber;
+            break;
+        }
+    }
+
+    if (rc != -1){
+        Inode og_inode;
+        readInode(og_inode, rc);
+        
+        // file is type directory
+        if (og_inode.Mode[0] == '0'){
+            rc = -2;
+        }
+
+        else {
+            Inode new_inode;
+            initialize_inode(new_inode, 0, 0, 0, "", 1, 1, 1); // reset inode
+            for (int i = 0; i < 12; i++){
+                if (og_inode.direct_block_pointers[i] != 0){
+                    Block new_block;
+                    int new_block_number = get_free_block();
+                    read_disk(new_block, og_inode.direct_block_pointers[i]); // then new_block has the old block's data
+                    write_to_disk(new_block, sizeof(Block), new_block_number); // write the copied block to a free block area
+                    new_inode.direct_block_pointers[i] = new_block_number; // add the new block to the new inode
+                }
+            }
+
+            // put the new inode in a free inode area
+            int free_inode_num = get_free_inode();
+            updateInode(new_inode, free_inode_num);
+
+            // add dst_file to the wd
+                for (int i = 0; i < 16; i++){
+                    if (wd.dirEntries[i].inodeNumber == -1){
+                        strcpy(wd.dirEntries[i].name, dst_file.c_str()); // add name
+                        wd.dirEntries[i].inodeNumber = free_inode_num;
+                        break;
+                    }
+                }
+
+            
+        }
     }
 
     return rc;
@@ -1264,6 +1320,17 @@ string FileSystem::identify_function(string *prompt)
         }
         else {
             rc = "File successfully removed";
+        }
+    }
+
+    else if (prompt[0] == "cp"){
+        prompt[1] = prompt[1].substr(1);
+        prompt[2] = prompt[2].substr(1);
+        if (my_ln(prompt[1], prompt[2]) == -1){
+            rc = prompt[1] + " or " + prompt[2] + "not found";
+        }
+        else if (my_ln(prompt[1], prompt[2]) > -1){
+            rc = "Copied " + prompt[1] + " to " + prompt[2];
         }
     }
 
