@@ -307,6 +307,7 @@ int FileSystem::get_free_block()
     }
 
     terminate_File_System();
+
     return rc;
 }
 
@@ -908,6 +909,56 @@ string FileSystem::my_cat(string file) {
     return rc;
 }
 
+// create a hard link for files
+int FileSystem::my_ln(string src_file, string dst_file){
+    int rc = -1;
+
+    // check if fs_file exists on disk
+    const char* fs_file = src_file.c_str();
+        for (int i = 0; i < 16; i++){
+            if (strcmp(wd.dirEntries[i].name, fs_file) == 0){
+                rc = wd.dirEntries[i].inodeNumber;
+                break;
+            }
+        }
+
+        if (rc != -1) {
+            Inode og_inode;
+            readInode(og_inode, rc);
+
+            // file is type directory
+            if (og_inode.Mode[0] == '0'){
+                rc = -2;
+            }
+            else {
+                // create new inode
+                Inode new_inode;
+                int new_inode_number = get_free_inode();
+
+                // duplicate block numbers from the src_file inode
+                readInode(new_inode, rc);
+
+                // increment the link count of the original inode
+                og_inode.link_count++;
+
+                //update both inodes
+                updateInode(og_inode, rc);
+                updateInode(new_inode, new_inode_number);
+
+                // add dst_file to the wd
+                for (int i = 0; i < 16; i++){
+                    if (wd.dirEntries[i].inodeNumber == -1){
+                        strcpy(wd.dirEntries[i].name, dst_file.c_str()); // add name
+                        wd.dirEntries[i].inodeNumber = new_inode_number;
+                        break;
+                    }
+                }
+            }
+        }
+    
+    return rc;
+}
+
 // just for testing
 void FileSystem::ps()
 {
@@ -1151,6 +1202,17 @@ string FileSystem::identify_function(string *prompt)
         //rc = cat(prompt[1]);
         prompt[1] = prompt[1].substr(1);
         rc = my_cat(prompt[1]);
+    }
+
+    else if (prompt[0] == "ln"){
+        prompt[1] = prompt[1].substr(1);
+        prompt[2] = prompt[2].substr(1);
+        if (my_ln(prompt[1], prompt[2]) == -1){
+            rc = prompt[1] + " or " + prompt[2] + "not found";
+        }
+        else if (my_ln(prompt[1], prompt[2]) > -1){
+            rc = "Hard link between " + prompt[1] + " and " + prompt[2] + " created";
+        }
     }
 
     else if (prompt[0] == "sign_in")
