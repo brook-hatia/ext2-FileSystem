@@ -10,7 +10,7 @@ int main()
     struct sockaddr_in servaddr;
 
     servaddr.sin_family = AF_INET;
-    servaddr.sin_port = htons(2005);
+    servaddr.sin_port = htons(2006);
     servaddr.sin_addr.s_addr = INADDR_ANY;
 
     int socketfd = socket(AF_INET, SOCK_STREAM, 0);

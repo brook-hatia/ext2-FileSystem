@@ -93,7 +93,9 @@ public:
     int initDataBlock;         // first block for file data
     int atRoot;
     int current_user; // stores uid of signed-in user
-    long file_size; //size of a file to be read
+    long file_size; // size of a file to be read
+    string *prompt_files; // keeps track if more than 1 filenames/paths
+    int prompt_len;
 
     // Functions
     FileSystem();
@@ -117,12 +119,17 @@ public:
     int get_directory_block(directory &dir, int inodeNum); // Gets the directory and returns block number
 
     // functions
-    int my_mkdir(string directoryName);
+    int my_mkdir(char *directoryName);
     int my_cd(string directoryName);
     string my_ls();
     int my_rmdir(string directoryName);
     int my_lcp(char *host_file);
     int my_Lcp(char *fs_file);
+    string my_cat(string file);
+    int my_ln(string src_file, string dst_file);
+    int my_rm(string file);
+    int my_cp(string src_file, string dst_file);
+    int my_mv(string src_file, string dst_file);
 
     int sign_in(string name); // searches user on disk and signs-in if user exists, else return -1;
     string who_am_i();        // returns name of signed-in user
@@ -131,7 +138,7 @@ public:
 
     // Server side code
     string *scan(char *parameter);            // identify function names from filenames/paths
-    string identify_function(string *prompt); // call appropriate functions from prompt
+    string identify_function(string prompt[]); // call appropriate functions from prompt
     void start_server();
 };
 
