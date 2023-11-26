@@ -119,7 +119,7 @@ public:
     int get_directory_block(directory &dir, int inodeNum); // Gets the directory and returns block number
 
     // functions
-    int my_mkdir(string directoryName);
+    int my_mkdir(char *directoryName);
     int my_cd(string directoryName);
     string my_ls();
     int my_rmdir(string directoryName);
@@ -129,6 +129,7 @@ public:
     int my_ln(string src_file, string dst_file);
     int my_rm(string file);
     int my_cp(string src_file, string dst_file);
+    int my_mv(string src_file, string dst_file);
 
     int sign_in(string name); // searches user on disk and signs-in if user exists, else return -1;
     string who_am_i();        // returns name of signed-in user
