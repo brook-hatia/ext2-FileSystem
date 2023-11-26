@@ -99,6 +99,7 @@ class FileSystem
         int my_mkdir(string directoryName);
         int my_cd(string directoryName);
         string my_ls();
+        vector<string> path_parse(string path);
 
         void ps(); //Just for testing
 
