@@ -127,6 +127,7 @@ public:
     int my_Lcp(char *fs_file);
     string my_cat(string file);
     int my_ln(string src_file, string dst_file);
+    int my_rm(string file);
 
     int sign_in(string name); // searches user on disk and signs-in if user exists, else return -1;
     string who_am_i();        // returns name of signed-in user

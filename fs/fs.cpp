@@ -959,6 +959,48 @@ int FileSystem::my_ln(string src_file, string dst_file){
     return rc;
 }
 
+// removes files
+int FileSystem::my_rm(string file) {
+    int rc = -1;
+    int pos_in_wd = -1; // which index the file is in wd
+    
+    //check if the file exists in the FS
+    const char* fs_file = file.c_str();
+    for (int i = 0; i < 16; i++){
+        if (strcmp(wd.dirEntries[i].name, fs_file) == 0) {
+            rc = wd.dirEntries[i].inodeNumber;
+            pos_in_wd = i;
+        }
+    }
+
+    if (rc != -1){
+        Inode inode;
+        readInode(inode, rc);
+
+        if (inode.link_count == 0){
+            // clear the block data
+            for (int i = 0; i < 12; i++){
+                if (inode.direct_block_pointers[i] != 0){
+                    Block block;
+                    read_disk(block, inode.direct_block_pointers[i]);
+                    strcpy(block.text, ""); // reset block data
+                    write_to_disk(block, sizeof(Block), inode.direct_block_pointers[i]); // write back to disk
+                    bm.bmap[inode.direct_block_pointers[i]] = '0'; // reset block bitmap
+                }
+            }
+        }
+
+        // reset inode
+        strcpy(wd.dirEntries[pos_in_wd].name, ""); // remove name
+        wd.dirEntries[pos_in_wd].inodeNumber = -1; // reset inode_number
+        initialize_inode(inode, 0, 0, 0, "", 0, 0, 0); // reset inode
+        updateInode(inode, rc);
+        im.imap[rc] = '0'; // reset inode bitmap
+    }
+
+    return rc;
+}
+
 // just for testing
 void FileSystem::ps()
 {
@@ -1212,6 +1254,16 @@ string FileSystem::identify_function(string *prompt)
         }
         else if (my_ln(prompt[1], prompt[2]) > -1){
             rc = "Hard link between " + prompt[1] + " and " + prompt[2] + " created";
+        }
+    }
+
+    else if (prompt[0] == "rm"){
+        prompt[1] = prompt[1].substr(1);
+        if (my_rm(prompt[1]) == -1){
+            rc = "File not found";
+        }
+        else {
+            rc = "File successfully removed";
         }
     }
 
