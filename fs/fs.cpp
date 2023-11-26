@@ -166,7 +166,7 @@ void FileSystem::initialize_File_System(){
         initialize_inode(rootInode, 0, 0, BLOCK_SIZE, "0777", 1, 1, 1);
         updateInode(rootInode, 0);
         write_to_disk(wd, sizeof(directory), initDataBlock);
-
+        rd = wd;
     }
 }
 
@@ -397,6 +397,7 @@ int FileSystem::my_mkdir(string directoryName)
     if(atRoot){
         // write working directory to disk
         write_to_disk(wd, sizeof(directory), initDataBlock);
+        rd = wd;//update root directory
     } else {
         //write working directory to disk in the correct block
         write_to_disk(wd, sizeof(directory), currentDirectoryBlock);   
@@ -407,18 +408,24 @@ int FileSystem::my_mkdir(string directoryName)
     return rc;
 }
 
-int FileSystem::my_cd(string directoryName){
-
-    int rc = 1;
-    int nameFound = 0;
-
+vector<string> FileSystem::path_parse(string path){
     //Parse the directory name
-    istringstream ss(directoryName);
+    istringstream ss(path);
     string component;
     vector<string> components;
     while (std::getline(ss, component, '/')) {
         components.push_back(component);
     }
+
+    return components;
+}
+
+int FileSystem::my_cd(string directoryName){
+
+    int rc = 1;
+    int nameFound = 0;
+
+    vector<string> components = path_parse(directoryName);
 
     //check if is absolute path
     if (directoryName[0] == '/') {
@@ -430,7 +437,7 @@ int FileSystem::my_cd(string directoryName){
         string tempcwd = "/";
         //loop through all the names starting from root
         for (const string& comp : components) {
-                for(int i =0; i< 16; ++i){
+                for(int i =0; i< 16; ++i){  
                     if(temp.dirEntries[i].name==comp){
                         nameFound = 1;
                         //Set working directory to that
@@ -460,11 +467,16 @@ int FileSystem::my_cd(string directoryName){
         string tempcwd = cwd;
         //loop through all the names
         for (const string& comp : components) {
+            
                 for(int i =0; i< 16; ++i){
+                    
+                    cout << temp.dirEntries[i].name <<endl;
                     if(temp.dirEntries[i].name==comp){
                         tempcwd+=comp + "/";
                         nameFound = 1;
+                        //cout << temp.dirEntries[i].inodeNumber;
                         currentDirectoryBlock = get_directory_block(temp, temp.dirEntries[i].inodeNumber);
+                        //cout << temp.dirEntries[i].inodeNumber;
                         break;
                     }
                 }
@@ -597,7 +609,17 @@ string FileSystem::my_ls()
 
 //Just for testing
 void FileSystem::ps(){
-
+//Parse the directory name
+    istringstream ss("1/2/3S");
+    string component;
+    vector<string> components;
+    while (std::getline(ss, component, '/')) {
+        components.push_back(component);
+    }
+    for (const string& comp : components) {
+        cout << comp << endl;
+    }
+    cout <<"done";
 }
 
 //******Server Side Code*******
@@ -671,9 +693,11 @@ string *FileSystem::scan(char *parameter)
         if (str_param[i] == ' ')
         {
             j++;
+        } else{
+            identify[j] += str_param[i];
         }
 
-        identify[j] += str_param[i];
+
     }
 
     return identify;
