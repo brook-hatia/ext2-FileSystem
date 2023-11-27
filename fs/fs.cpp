@@ -624,7 +624,7 @@ string FileSystem::my_ls()
     {
         if (wd.dirEntries[i].inodeNumber == -1)
         {
-            break;
+            continue;
         }
 
         // if (wd.dirEntries[i].inodeNumber == -1)
@@ -873,44 +873,52 @@ int FileSystem::my_rmdir(string directoryName)
     {
         if (wd.dirEntries[i].inodeNumber == -1)
         {
-            break;
+            continue;
         }
 
         if (wd.dirEntries[i].name == directoryName)
         {
             flag = 1;                                    // directory exists
             inode_number = wd.dirEntries[i].inodeNumber; // get directoryName's inode number
-            cout << wd.dirEntries[i].name;
+            
             wd.dirEntries[i].inodeNumber = -1; // reset inodeNumber;
             break;
         }
     }
-
-    // reset/initialize inode
-    Inode inode;
-    initialize_inode(inode, 0, 0, 0, "0000", 0, 0, 0);
-    updateInode(inode, inode_number);
 
     // get block number
     directory dir;
     int block_number = get_directory_block(dir, inode_number);
     read_disk(dir, inode_number);
 
+    // reset/initialize inode
+    Inode inode;
+    initialize_inode(inode, 0, 0, 0, "0000", 0, 0, 0);
+    updateInode(inode, inode_number);
+
     // reset the directory entries
-    for (int i = 0; i < 16; ++i)
-    {
-        dir.dirEntries[i].inodeNumber = -1;
-    }
+    // for (int i = 0; i < 16; ++i)
+    // {
+    //     dir.dirEntries[i].inodeNumber = -1;
+    // }
 
     // update block bitmap and inode bitmap
     bm.bmap[block_number] = '0';
     im.imap[inode_number] = '0';
 
     // Write working directory back to disk
-    write_to_disk(dir, sizeof(directory), inode.direct_block_pointers[0]);
-    write_to_disk(wd, sizeof(directory), initDataBlock);
-    write_to_disk(bm, sizeof(blockBitmap), 0);
-    write_to_disk(im, sizeof(iNodeBitmap), 1);
+    //write_to_disk(dir, sizeof(directory), inode.direct_block_pointers[0]);
+                        //Save to disk
+                        if(atRoot){
+                            // write working directory to disk
+                            write_to_disk(wd, sizeof(directory), initDataBlock);
+                            rd = wd;//update root directory
+                        } else {
+                            //write working directory to disk in the correct block
+                            write_to_disk(wd, sizeof(directory), currentDirectoryBlock);   
+                        }
+    // write_to_disk(bm, sizeof(blockBitmap), 0);
+    // write_to_disk(im, sizeof(iNodeBitmap), 1);
 
     // directory doesn't exist
     if (!flag)
