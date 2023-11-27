@@ -2,11 +2,12 @@
 #define fs_h
 #include <fstream>
 #include <string.h>
+#include <vector>
 using namespace std;
 
 //Datas
 #define BLOCK_SIZE 4096
-#define TOTAL_BLOCK_NUM 4096
+#define TOTAL_BLOCK_NUM 524288
 #define TOTAL_INODE_NUM 1024
 
 
@@ -52,7 +53,7 @@ class FileSystem
         };
 
         struct blockBitmap{
-            char bmap[4096];
+            char bmap[TOTAL_BLOCK_NUM];
         };
 
         // Size is exactly 4096
@@ -68,6 +69,7 @@ class FileSystem
         directory wd; //working directory
         directory rd; //root directory
         string cwd;
+        int file_size;
         
         struct directory directoryTable[10]; //Table recording the opened directories
 
@@ -78,6 +80,18 @@ class FileSystem
         //Functions
         FileSystem();
         ~FileSystem();
+
+
+        //testing users
+        struct User
+        {
+            string name[6];
+            int uid[6];
+            int permission_bits[6];
+        };
+        User users;
+        int current_user;
+        bool signed_in;
 
 
         bool check_disk();                    // check if disk exists
@@ -93,12 +107,24 @@ class FileSystem
         void read_disk(auto &x, int blockNum); // read inode with pointer[0] = str from the list of inodes on the disk
         void readInode(Inode &i, int inodeNum);
         void updateInode(Inode i, int inodeNum);
+        string who_am_i();
+        
 
         int get_directory_block(directory &dir, int inodeNum); //Gets the directory and returns block number
 
         int my_mkdir(string directoryName);
         int my_cd(string directoryName);
         string my_ls();
+        int my_rmdir(string directoryName);
+        int my_lcp(char *host_file);
+        int my_Lcp(char *fs_file);
+        string my_cat(string file);
+        int my_ln(string src_file, string dst_file);
+        int my_rm(string file);
+        int my_cp(string src_file, string dst_file);
+        int my_mv(string src_file, string dst_file);
+        int my_chown(string newowner, string filename); // change ownership of a file/directory
+        vector<string> path_parse(string path);
 
         void ps(); //Just for testing
 
