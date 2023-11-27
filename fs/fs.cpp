@@ -448,7 +448,7 @@ int FileSystem::get_directory_block(directory &dir, int inodeNum)
 }
 
 // Create a directory
-int FileSystem::my_mkdir(char *directoryName)
+int FileSystem::my_mkdir(string directoryName)
 {
     int rc = -1;
     // initialize inode
@@ -456,23 +456,17 @@ int FileSystem::my_mkdir(char *directoryName)
     int inodeNum = get_free_inode();
     initialize_inode(inode, 0, 0, BLOCK_SIZE, "0777", 1, 1, 1);
 
-    cout << "test 1" << endl;
     // update working directory
     for (int i = 0; i < 16; i++)
     {
         if (wd.dirEntries[i].inodeNumber == -1)
         {
-            cout << "test rc "<< i << endl;
             rc = 1;
-            cout << "test inodeNum " << i << endl;
+            strcpy(wd.dirEntries[i].name, directoryName.c_str()); // add name
             wd.dirEntries[i].inodeNumber = inodeNum;              // add inode number
-            cout << "test name " << i << endl;
-            strcpy(wd.dirEntries[i].name, directoryName); // add name
-            cout << "test end " << i << endl;
             break;
         }
     }
-    
 
     updateInode(inode, inodeNum);
     directory new_dir;
@@ -1066,17 +1060,76 @@ int FileSystem::my_cp(string src_file, string dst_file) {
                         break;
                     }
                 }
-
-            
         }
     }
 
     return rc;
 }
 
-
+// move files
 int FileSystem::my_mv(string src_file, string dst_file){
+    int rc = -1;
 
+    //check if the file exists in the FS
+    const char* fs_file = src_file.c_str();
+    for (int i = 0; i < 16; i++){
+        if (strcmp(wd.dirEntries[i].name, fs_file) == 0) {
+            rc = wd.dirEntries[i].inodeNumber;
+            break;
+        }
+    }
+
+    if (rc != -1){
+        Inode og_inode;
+        readInode(og_inode, rc);
+        
+        // file is type directory
+        if (og_inode.Mode[0] == '0'){
+            rc = -2;
+        }
+
+        else {
+            Inode new_inode;
+            initialize_inode(new_inode, 0, 0, 0, "", 1, 1, 1); // reset inode
+            for (int i = 0; i < 12; i++){
+                if (og_inode.direct_block_pointers[i] != 0){
+                    Block new_block;
+                    int new_block_number = get_free_block();
+                    read_disk(new_block, og_inode.direct_block_pointers[i]); // then new_block has the old block's data
+                    write_to_disk(new_block, sizeof(Block), new_block_number); // write the copied block to a free block area
+                    new_inode.direct_block_pointers[i] = new_block_number; // add the new block to the new inode
+                }
+            }
+
+            // put the new inode in a free inode area
+            int free_inode_num = get_free_inode();
+            updateInode(new_inode, free_inode_num);
+
+            // add dst_file to the wd
+                for (int i = 0; i < 16; i++){
+                    if (wd.dirEntries[i].inodeNumber == -1){
+                        strcpy(wd.dirEntries[i].name, dst_file.c_str()); // add name
+                        wd.dirEntries[i].inodeNumber = free_inode_num;
+                        break;
+                    }
+                }
+
+            // remove the original blocks
+            Block block;
+            for (int i = 0; i < 12; i++){
+                if (og_inode.direct_block_pointers[i] != 0){
+                    read_disk(block, og_inode.direct_block_pointers[i]); // read the block at the block num
+                    memset(block.text, '\0', BLOCK_SIZE); // empty the block data
+                    bm.bmap[og_inode.direct_block_pointers[i]] = '0'; // reset the block bitmap
+                }
+            }
+
+            im.imap[rc] = '0'; // reset the inode bitmap
+            initialize_inode(og_inode, 0, 0, 0, "", 0, 0, 0); // reset the copied inode data
+        }
+    }
+
+    return rc;
 }
 
 // just for testing
@@ -1095,12 +1148,12 @@ void FileSystem::start_server()
     struct sockaddr_in servaddr;
 
     servaddr.sin_family = AF_INET;
-    servaddr.sin_port = htons(2006);
+    servaddr.sin_port = htons(2007);
     servaddr.sin_addr.s_addr = INADDR_ANY;
 
     int socketfd = socket(AF_INET, SOCK_STREAM, 0);
 
-    auto bindfd = bind(socketfd, (sockaddr *)&servaddr, sizeof(servaddr));
+    int bindfd = bind(socketfd, (sockaddr *)&servaddr, sizeof(servaddr));
     int listenfd = listen(socketfd, 1);
 
     cout << "Listening for connections..." << endl;
@@ -1248,9 +1301,7 @@ string FileSystem::identify_function(string *prompt)
         }
         else
         {
-            char data[prompt[1].length()];
-            strcpy(data, prompt[1].c_str());
-            if (my_mkdir(data) == -1)
+            if (my_mkdir(prompt[1]) == -1)
             {
                 rc = "Directory not created";
             }

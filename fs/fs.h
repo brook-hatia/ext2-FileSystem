@@ -119,7 +119,7 @@ public:
     int get_directory_block(directory &dir, int inodeNum); // Gets the directory and returns block number
 
     // functions
-    int my_mkdir(char *directoryName);
+    int my_mkdir(string directoryName);
     int my_cd(string directoryName);
     string my_ls();
     int my_rmdir(string directoryName);
