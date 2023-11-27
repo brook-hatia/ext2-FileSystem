@@ -4,7 +4,7 @@
 #include <string>
 #include <ctime>
 #include <chrono>
-# include <cmath>
+#include <cmath>
 #include <vector>
 #include <sstream>
 #include <sys/socket.h> //library for server-client communication
@@ -15,6 +15,31 @@ using namespace std;
 
 FileSystem::FileSystem(){
 
+        // create and write users on disk
+        users.name[0] = "root";
+        users.uid[0] = 100;
+        users.permission_bits[0] = 7; // read/write/execute
+
+        users.name[1] = "user1";
+        users.uid[1] = 101;
+        users.permission_bits[1] = 1; // execute only
+
+        users.name[2] = "user2";
+        users.uid[2] = 102;
+        users.permission_bits[2] = 2; // write only
+
+        users.name[3] = "user3";
+        users.uid[3] = 103;
+        users.permission_bits[3] = 3; // write and execute
+
+        users.name[4] = "user4";
+        users.uid[4] = 104;
+        users.permission_bits[4] = 4; // read only
+
+        users.name[5] = "user5";
+        users.uid[5] = 105;
+        users.permission_bits[5] = 5; // read and execute
+        signed_in = 0;
 }
 
 FileSystem::~FileSystem(){
@@ -72,10 +97,10 @@ void FileSystem::initialize_File_System(){
     // Check if Disk Already exists if not initialize the disk
     if ((pFile = fopen ("disk", "r"))){
         fclose(pFile);
-        initDataBlock = 2 + TOTAL_INODE_NUM/32;
+        initDataBlock = 17 + TOTAL_INODE_NUM/32;
         // Load Inode and Block Bitmap from disk
         read_disk(bm, 0);
-        read_disk(im, 1);
+        read_disk(im, 16);
         // Get Root directory and working directory
         read_disk(rd, initDataBlock);
         read_disk(wd, initDataBlock);
@@ -103,7 +128,7 @@ void FileSystem::initialize_File_System(){
         }
         
         // Mark block used by the bit maps and inode
-        for (int i = 0; i< 2+TOTAL_INODE_NUM/32; ++i){
+        for (int i = 0; i< 17+TOTAL_INODE_NUM/32; ++i){
             bm.bmap[i] = '1';
         }
         write_to_disk(bm, sizeof(blockBitmap), 0);
@@ -114,7 +139,7 @@ void FileSystem::initialize_File_System(){
         }
 
 
-        write_to_disk(im, sizeof(iNodeBitmap), 1);
+        write_to_disk(im, sizeof(iNodeBitmap), 16);
 
         cwd= "/";
 
@@ -147,7 +172,7 @@ void FileSystem::initialize_File_System(){
 
         //Write the inodes to disk
         pFile = fopen ("disk", "r+b");
-        fseek(pFile, 2*BLOCK_SIZE, SEEK_SET);
+        fseek(pFile, 17*BLOCK_SIZE , SEEK_SET);
         int len = sizeof(inodeArray);
         char inode_buff[len];
         memset(inode_buff, 0, len);
@@ -155,7 +180,7 @@ void FileSystem::initialize_File_System(){
         fwrite(inode_buff, sizeof(char), len, pFile);
         fclose(pFile);
 
-        initDataBlock = 2 + TOTAL_INODE_NUM/32;
+        initDataBlock = 17 + TOTAL_INODE_NUM/32;
         currentDirectoryBlock = initDataBlock;
         // Initialize root directory and write to disk
         for(int i =0; i< 16; ++i){
@@ -166,6 +191,7 @@ void FileSystem::initialize_File_System(){
         initialize_inode(rootInode, 0, 0, BLOCK_SIZE, "0777", 1, 1, 1);
         updateInode(rootInode, 0);
         write_to_disk(wd, sizeof(directory), initDataBlock);
+        rd = wd;
 
     }
 }
@@ -176,7 +202,7 @@ void FileSystem::readInode(Inode &i, int inodeNum){
 
     //Calculatte inode position in Bytes
     //int inode_position = 2*BLOCK_SIZE + inodeNum/32*BLOCK_SIZE + inodeNum/32*128;
-    int inode_position = 2*BLOCK_SIZE + inodeNum*128;
+    int inode_position = 17*BLOCK_SIZE + inodeNum*128;
 
     //get to the correct Inode position
     fseek(pFile, inode_position, SEEK_SET);
@@ -209,7 +235,7 @@ void FileSystem::updateInode(Inode i, int inodeNum){
 
     //Calculatte inode position in Bytes
     //int inode_position = 2*BLOCK_SIZE + inodeNum/32*BLOCK_SIZE + inodeNum/32*128;
-    int inode_position = 2*BLOCK_SIZE + inodeNum*128;
+    int inode_position = 17*BLOCK_SIZE + inodeNum*128;
     //get to the correct Inode position
     fseek(pFile, inode_position, SEEK_SET);
 
@@ -224,7 +250,7 @@ void FileSystem::updateInode(Inode i, int inodeNum){
 void FileSystem::terminate_File_System(){
 
     write_to_disk(bm, sizeof(blockBitmap), 0);
-    write_to_disk(im, sizeof(iNodeBitmap), 1);
+    write_to_disk(im, sizeof(iNodeBitmap), 16);
 
 }
 
@@ -241,7 +267,7 @@ int FileSystem::get_free_inode(){
             break;
         }
     }
-
+ 
     return rc;
 }
 
@@ -256,6 +282,7 @@ int FileSystem::get_free_block(){
                 break;
         } 
     }
+ 
     return rc;
 }
 
@@ -372,7 +399,7 @@ int FileSystem::my_mkdir(string directoryName)
     // initialize inode
     Inode inode;
     int inodeNum = get_free_inode();
-    initialize_inode(inode, 0, 0, BLOCK_SIZE, "0777", 1, 1, 1);
+    initialize_inode(inode, users.uid[current_user], 0, BLOCK_SIZE, "0777", 1, 1, 1);
 
     // update working directory
     for (int i = 0; i < 16; i++)
@@ -397,6 +424,7 @@ int FileSystem::my_mkdir(string directoryName)
     if(atRoot){
         // write working directory to disk
         write_to_disk(wd, sizeof(directory), initDataBlock);
+        rd = wd;//update root directory
     } else {
         //write working directory to disk in the correct block
         write_to_disk(wd, sizeof(directory), currentDirectoryBlock);   
@@ -407,18 +435,90 @@ int FileSystem::my_mkdir(string directoryName)
     return rc;
 }
 
-int FileSystem::my_cd(string directoryName){
-
-    int rc = 1;
-    int nameFound = 0;
-
+vector<string> FileSystem::path_parse(string path){
     //Parse the directory name
-    istringstream ss(directoryName);
+    istringstream ss(path);
     string component;
     vector<string> components;
     while (std::getline(ss, component, '/')) {
         components.push_back(component);
     }
+
+    return components;
+}
+
+int FileSystem::my_chown(string newowner, string filename) {
+    int rc = -1;
+
+    /*
+     ******************************** The following conditions should be met to change owner **************************************
+    - user is root
+    - need at least write access
+    - you are the owner of the file
+    */
+   
+   // check if user exists in FS
+   int user_pos = -1;
+    for (int i = 0; i < 6; i++){
+        if (users.name[i] == newowner){
+            user_pos = i;
+            rc = 0;
+            break;
+        }
+    }
+
+   //check if the file exists in the FS
+   int inode_num = 0;
+    const char* fs_file = filename.c_str();
+    for (int i = 0; i < 16; i++){
+        if (strcmp(wd.dirEntries[i].name, fs_file) == 0) {
+            inode_num = wd.dirEntries[i].inodeNumber;
+            rc = 1;
+            break;
+        }
+    }
+
+    // both the "newowner" and "filename" exist in FS
+    int check = 0;
+    if (rc == 1){
+        // check if all of the above conditions are met
+        
+        Inode temp_inode;
+        readInode(temp_inode, inode_num);
+        if (users.uid[current_user] == temp_inode.uid){
+            check++;
+        }
+        cout << check;
+
+        if (users.permission_bits[user_pos] == 2 || users.permission_bits[user_pos] == 3 || users.permission_bits[current_user] == 7){
+            check++;
+        }
+        cout << check;
+
+        if (users.name[current_user] == "root"){
+            check++;
+        }
+        cout << check;
+
+        // if any one of the conditions are met, change the uid to "newowner" uid
+        if (check > 0){
+            temp_inode.uid = users.uid[user_pos];
+        }
+
+        updateInode(temp_inode, inode_num);
+        cout << check;
+    }
+
+   
+    return check;
+}
+
+int FileSystem::my_cd(string directoryName){
+
+    int rc = 1;
+    int nameFound = 0;
+
+    vector<string> components = path_parse(directoryName);
 
     //check if is absolute path
     if (directoryName[0] == '/') {
@@ -431,13 +531,18 @@ int FileSystem::my_cd(string directoryName){
         //loop through all the names starting from root
         for (const string& comp : components) {
                 for(int i =0; i< 16; ++i){
-                    if(temp.dirEntries[i].name==comp){
-                        nameFound = 1;
-                        //Set working directory to that
-                        tempcwd+=comp + "/";
-                        currentDirectoryBlock = get_directory_block(temp, temp.dirEntries[i].inodeNumber);
-                        break;
-                    }
+                    if(temp.dirEntries[i].inodeNumber != -1){
+                        Inode inode;
+                        readInode(inode, temp.dirEntries[i].inodeNumber);  
+                
+                        if(temp.dirEntries[i].name==comp && inode.Mode[0]=='0'){
+                            nameFound = 1;
+                            //Set working directory to that
+                            tempcwd+=comp + "/";
+                            currentDirectoryBlock = get_directory_block(temp, temp.dirEntries[i].inodeNumber);
+                            break;
+                        }
+                        }
                 }
                 //If name not found break
                 if(!nameFound){
@@ -460,12 +565,20 @@ int FileSystem::my_cd(string directoryName){
         string tempcwd = cwd;
         //loop through all the names
         for (const string& comp : components) {
+            
                 for(int i =0; i< 16; ++i){
-                    if(temp.dirEntries[i].name==comp){
-                        tempcwd+=comp + "/";
-                        nameFound = 1;
-                        currentDirectoryBlock = get_directory_block(temp, temp.dirEntries[i].inodeNumber);
-                        break;
+                    
+                    if(temp.dirEntries[i].inodeNumber != -1){
+                        Inode inode;
+                        readInode(inode, temp.dirEntries[i].inodeNumber); 
+                        if(temp.dirEntries[i].name==comp && inode.Mode[0]=='0'){
+                            tempcwd+=comp + "/";
+                            nameFound = 1;
+                
+                            currentDirectoryBlock = get_directory_block(temp, temp.dirEntries[i].inodeNumber);
+                            
+                            break;
+                        }
                     }
                 }
                 //If name not found break
@@ -502,17 +615,29 @@ string FileSystem::my_ls()
 {
     string outPut = "";
     int flag = 1;
+    int total_block_count = 0;
     // does equivalent of `ls -l`
-    // format: {filetype}{permission bits} {dirEntries.size()} {owner} {root/staff?} {file size} {creation date} {dirEntries[i].name}
+    /* format: total {block_count}
+               {filetype}{permission bits} {dirEntries.size()} {owner} {root/staff?} {file size} {modified date} {dirEntries[i].name} 
+    */
     for (int i = 0; i < 16; i++)
     {
         if (wd.dirEntries[i].inodeNumber == -1)
         {
             break;
         }
+
+        // if (wd.dirEntries[i].inodeNumber == -1)
+        // {
+        //     continue;
+        // }
+
         flag = 0;
         Inode new_inode;
         readInode(new_inode, wd.dirEntries[i].inodeNumber);
+
+        // increment block_count
+        total_block_count += new_inode.block_count;
 
         // process the mode. 0777
 
@@ -578,43 +703,604 @@ string FileSystem::my_ls()
                 i++;
             }
         }
-        string owner = "0:0";
-        string owner_class = "root";
-        int file_size = new_inode.file_size;
-        string file_creation_date = new_inode.creation_time;
+        
+        // get user through inode's uid
+        string owner = "";
+        int uid = new_inode.uid;
+        for (int i = 0; i < 6; i++){
+            if (users.uid[i] == new_inode.uid){
+                owner = users.name[i];
+                break;
+            }
+        }
 
-        string dir_name = wd.dirEntries[i].name;
-        outPut += file_type + permission_bits + " ";
-        outPut += dir_entries_count + " " + owner + " " + owner_class + " " + file_creation_date
-                 + " " + dir_name + "\n";
+        outPut += file_type + permission_bits + " " + to_string(new_inode.link_count + 1) + " " + owner + " " + to_string(new_inode.file_size) + " " + new_inode.modified_time + " " + wd.dirEntries[i].name + "\n";
+        
     }
     if(flag){
-        outPut += "nothing here";
+        outPut = "nothing here";
     }
-    return outPut;
+
+    string final_output = "total " + to_string(total_block_count) + "\n";
+    final_output += outPut;
+    return final_output;
+}
+
+
+
+
+
+// copy a host file to the current directory in the FS
+int FileSystem::my_lcp(char *host_file)
+{
+    int rc = -1;
+
+    FILE *pFile = fopen(host_file, "r+b");
+
+    if (pFile != NULL)
+    {
+        fseek(pFile, 0, SEEK_END);
+        long len = ftell(pFile);
+        file_size = len;
+        fseek(pFile, 0, SEEK_SET);
+
+        int num_of_blocks = ceil(float(len) / BLOCK_SIZE);
+        
+        Inode inode;
+        initialize_inode(inode, users.uid[current_user], 0, len, "1777", 1, 1, 1);
+        int inodeNum = get_free_inode();
+        rc = inodeNum;
+
+        int file_name_len = strlen(host_file);
+        for (int i = 0; i < 16; i++){
+            if (wd.dirEntries[i].inodeNumber == -1){
+                wd.dirEntries[i].inodeNumber = rc;
+                
+                if (file_name_len <= 250){
+                    strcpy(wd.dirEntries[i].name, string(host_file).c_str());
+                   
+                    if(atRoot){
+                        // write working directory to disk
+                        write_to_disk(wd, sizeof(directory), initDataBlock);
+                        rd = wd;//update root directory
+                    } else {
+                        //write working directory to disk in the correct block
+                        write_to_disk(wd, sizeof(directory), currentDirectoryBlock);   
+                    }
+                }
+                else {
+                    perror("file name exceeded 250");
+                    exit(1);
+                }
+                break;
+            }
+        }
+
+        // update inode's file_size attribute
+        inode.file_size = len;
+
+        int temp_file_size = file_size;
+        for (int i = 0; i < num_of_blocks; i++)
+        {
+            int write_size = (temp_file_size < BLOCK_SIZE) ? temp_file_size : BLOCK_SIZE;
+
+            // Read the file in chunks
+            char buffer[BLOCK_SIZE];
+            memset(buffer, 0, BLOCK_SIZE);
+            // fseek(pFile, i * BLOCK_SIZE, SEEK_SET);
+            fread(buffer, 1, write_size, pFile);
+
+            Block block;
+            // strncpy(block.text, buffer, BLOCK_SIZE);
+            memcpy(block.text, buffer, BLOCK_SIZE);
+
+            // Get a free block and write the block to disk
+            int blockNum = get_free_block();
+            write_to_disk(block, sizeof(Block), blockNum);
+
+            //save block numbers on the inode
+            if (i < 12){
+                inode.direct_block_pointers[i] = blockNum;
+            }
+
+            temp_file_size -= write_size;
+        }
+
+        updateInode(inode, inodeNum);
+
+        fclose(pFile);
+    }
+
+    return rc;
+}
+
+// copy a FS file from the current directory to the current directory in the host system
+int FileSystem::my_Lcp(char *fs_file)
+{
+    int rc = -1; // rc here is the inode number of fs_file
+
+    // check if fs_file exists on disk
+    for (int i = 0; i < 16; i++) {
+        if (strcmp(wd.dirEntries[i].name, fs_file) == 0) {
+            rc = wd.dirEntries[i].inodeNumber;
+            break;
+        }
+    }
+
+    if (rc != -1) {
+        string str_file_name = "export_" + string(fs_file);
+        // str_file_name += ".txt";
+
+        FILE *pFile = fopen(str_file_name.c_str(), "a+b");
+
+        Inode inode;
+        readInode(inode, rc);
+
+        int steps = ceil(float(file_size)/ 4096);
+
+        for (int i = 0; i < 12 && i < steps; i++) {
+            if (inode.direct_block_pointers[i] != 0) {
+                Block block;
+                read_disk(block, inode.direct_block_pointers[i]);
+
+                int write_size = (file_size < BLOCK_SIZE) ? file_size : BLOCK_SIZE;
+
+                // fseek(pFile, i * BLOCK_SIZE, SEEK_SET);
+                fwrite(block.text, 1, write_size, pFile);
+
+                file_size -= write_size;
+
+                // Break the loop if we have copied all the required bytes
+                if (file_size == 0) {
+                    break;
+                }
+            }
+        }
+
+
+        fclose(pFile);
+    }
+
+    return rc;
+}
+
+//function to remove directory
+int FileSystem::my_rmdir(string directoryName)
+{
+    int flag = 0;         // directory doesn't exist
+    int inode_number = 0; // directoryName's inode number
+    for (int i = 0; i < 16; i++)
+    {
+        if (wd.dirEntries[i].inodeNumber == -1)
+        {
+            break;
+        }
+
+        if (wd.dirEntries[i].name == directoryName)
+        {
+            flag = 1;                                    // directory exists
+            inode_number = wd.dirEntries[i].inodeNumber; // get directoryName's inode number
+            cout << wd.dirEntries[i].name;
+            wd.dirEntries[i].inodeNumber = -1; // reset inodeNumber;
+            break;
+        }
+    }
+
+    // reset/initialize inode
+    Inode inode;
+    initialize_inode(inode, 0, 0, 0, "0000", 0, 0, 0);
+    updateInode(inode, inode_number);
+
+    // get block number
+    directory dir;
+    int block_number = get_directory_block(dir, inode_number);
+    read_disk(dir, inode_number);
+
+    // reset the directory entries
+    for (int i = 0; i < 16; ++i)
+    {
+        dir.dirEntries[i].inodeNumber = -1;
+    }
+
+    // update block bitmap and inode bitmap
+    bm.bmap[block_number] = '0';
+    im.imap[inode_number] = '0';
+
+    // Write working directory back to disk
+    write_to_disk(dir, sizeof(directory), inode.direct_block_pointers[0]);
+    write_to_disk(wd, sizeof(directory), initDataBlock);
+    write_to_disk(bm, sizeof(blockBitmap), 0);
+    write_to_disk(im, sizeof(iNodeBitmap), 1);
+
+    // directory doesn't exist
+    if (!flag)
+    {
+        cout << "Directory not found" << endl;
+    }
+
+    return flag;
+}
+
+//outputs contents of a directory/file
+string FileSystem::my_cat(string file) {
+    string rc = "";
+    int inode_number = -1; // rc here is the inode number of fs_file
+
+    // check if fs_file exists on disk
+    const char* fs_file = file.c_str();
+    for (int i = 0; i < 16; i++) {
+        if (strcmp(wd.dirEntries[i].name, fs_file) == 0) {
+            inode_number = wd.dirEntries[i].inodeNumber;
+            break;
+        }
+    }
+
+    if (inode_number != -1) {
+        Inode inode;
+        readInode(inode, inode_number);
+
+        int steps = ceil(float(inode.file_size)/ 4096);
+        int temp_file_size = inode.file_size;
+
+        // file is type directory
+        if (inode.Mode[0] == '0'){
+            rc = file + ": Is a directory";
+        }
+        else {
+            for (int i = 0; i < 12 && i < steps; i++) {
+                if (inode.direct_block_pointers[i] != 0) {
+                    Block block;
+                    read_disk(block, inode.direct_block_pointers[i]);
+
+                    // rc += block.text;
+                    int write_size = (temp_file_size < BLOCK_SIZE) ? temp_file_size : BLOCK_SIZE;
+                    // fseek(pFile, i * BLOCK_SIZE, SEEK_SET);
+                    string newText(block.text, block.text + write_size);
+                    rc += newText;
+                    temp_file_size -= write_size;
+
+                    // Break the loop if we have copied all the required bytes
+                    if (temp_file_size == 0) {
+                        break;
+                    }
+                }
+            }
+        }
+    }
+
+    else {
+        rc = file + " not found";
+    }
+
+    return rc;
+}
+
+// create a hard link for files
+int FileSystem::my_ln(string src_file, string dst_file){
+    int rc = -1;
+
+    // check if fs_file exists on disk
+    const char* fs_file = src_file.c_str();
+        for (int i = 0; i < 16; i++){
+            if (strcmp(wd.dirEntries[i].name, fs_file) == 0){
+                rc = wd.dirEntries[i].inodeNumber;
+                break;
+            }
+        }
+
+        if (rc != -1) {
+            Inode og_inode;
+            readInode(og_inode, rc);
+
+            // file is type directory
+            if (og_inode.Mode[0] == '0'){
+                rc = -2;
+            }
+            else {
+                // create new inode
+                Inode new_inode;
+                int new_inode_number = get_free_inode();
+
+                // duplicate block numbers from the src_file inode
+                readInode(new_inode, rc);
+
+                // increment the link count of the original inode
+                og_inode.link_count++;
+
+                //update both inodes
+                updateInode(og_inode, rc);
+                updateInode(new_inode, new_inode_number);
+
+                // add dst_file to the wd
+                for (int i = 0; i < 16; i++){
+                    if (wd.dirEntries[i].inodeNumber == -1){
+                        
+                        strcpy(wd.dirEntries[i].name, dst_file.c_str()); // add name
+                        wd.dirEntries[i].inodeNumber = new_inode_number;
+
+                        //Save to disk
+                        if(atRoot){
+                            // write working directory to disk
+                            write_to_disk(wd, sizeof(directory), initDataBlock);
+                            rd = wd;//update root directory
+                        } else {
+                            //write working directory to disk in the correct block
+                            write_to_disk(wd, sizeof(directory), currentDirectoryBlock);   
+                        }
+                        
+                        break;
+                    }
+                }
+            }
+        }
+    
+    return rc;
+}
+
+int FileSystem::my_rm(string file) {
+    int rc = -1;
+    int pos_in_wd = -1; // which index the file is in wd
+    
+    //check if the file exists in the FS
+    const char* fs_file = file.c_str();
+    for (int i = 0; i < 16; i++){
+        if (strcmp(wd.dirEntries[i].name, fs_file) == 0) {
+            rc = wd.dirEntries[i].inodeNumber;
+            pos_in_wd = i;
+            break;
+        }
+    }
+
+    if (rc != -1){
+        Inode inode;
+        readInode(inode, rc);
+
+        if (inode.link_count == 0){
+            // clear the block data
+            for (int i = 0; i < 12; i++){
+                if (inode.direct_block_pointers[i] != 0){
+                    Block block;
+                    read_disk(block, inode.direct_block_pointers[i]);
+                    strcpy(block.text, ""); // reset block data
+                    write_to_disk(block, sizeof(Block), inode.direct_block_pointers[i]); // write back to disk
+                    bm.bmap[inode.direct_block_pointers[i]] = '0'; // reset block bitmap
+                }
+            }
+        }
+
+        // update the inode data
+        strcpy(wd.dirEntries[pos_in_wd].name, ""); // remove name
+        wd.dirEntries[pos_in_wd].inodeNumber = -1; // reset inode_number
+        initialize_inode(inode, 0, 0, 0, "", 0, 0, 0); // reset inode
+        updateInode(inode, rc);
+        im.imap[rc] = '0'; // reset inode bitmap
+
+        //Save to disk
+        if(atRoot){
+            // write working directory to disk
+            write_to_disk(wd, sizeof(directory), initDataBlock);
+            rd = wd;//update root directory
+        } else {
+            //write working directory to disk in the correct block
+            write_to_disk(wd, sizeof(directory), currentDirectoryBlock);   
+        }
+    }
+
+    return rc;
+}
+
+// copy files
+int FileSystem::my_cp(string src_file, string dst_file) {
+    int rc = -1;
+    
+
+    //check if the file exists in the FS
+    const char* fs_file = src_file.c_str();
+    for (int i = 0; i < 16; i++){
+        if (strcmp(wd.dirEntries[i].name, fs_file) == 0) {
+            rc = wd.dirEntries[i].inodeNumber;
+            
+            break;
+        }
+    }
+
+    if (rc != -1){
+        Inode og_inode;
+        readInode(og_inode, rc);
+        
+        // file is type directory
+        if (og_inode.Mode[0] == '0'){
+            rc = -2;
+        }
+
+        else {
+            Inode new_inode;
+            readInode(new_inode, rc);
+            //loop to correct file
+            vector<string> components = path_parse(dst_file);
+
+            int nameFound = 0;
+            int temp_block_num;
+            directory temp;
+            //check if is absolute path
+            if (dst_file[0] == '/') {
+                //Remove the first empty element in the vector
+                components.erase(components.begin());
+                temp = rd;
+            }else{
+                temp = wd;
+            }
+
+            //loop through all the names starting from correct directory
+            for (const string& comp : components) {
+                    for(int i =0; i< 16; ++i){
+                        if(temp.dirEntries[i].inodeNumber != -1){
+                            Inode inode;
+                            readInode(inode, temp.dirEntries[i].inodeNumber);  
+                    
+                            if(temp.dirEntries[i].name==comp && inode.Mode[0]=='0'){
+                                nameFound = 1;
+                                temp_block_num = get_directory_block(temp, temp.dirEntries[i].inodeNumber);
+                                break;
+                            }
+                        }
+                    }
+                    //If name not found break
+                    if(!nameFound){
+                        rc = -1;
+                        nameFound=1;    // to mark difference of found
+                        break;
+                    }
+                    // Restart nameFound for next directory
+                    nameFound = 0;
+            }
+            //write the name of the copied file to the correct directory
+            if(!nameFound){
+                int temp_inode = get_free_inode();
+                for(int i =0; i<16;i++){
+                    if(temp.dirEntries[i].inodeNumber==-1){                       
+                        temp.dirEntries[i].inodeNumber = temp_inode;
+                        strcpy(temp.dirEntries[i].name, fs_file);
+                        write_to_disk(temp, sizeof(directory), temp_block_num);
+                        break;
+                    }
+                }
+
+                //!! Need to change for indirect path
+                for (int i = 0; i < 12; i++){
+                    if (new_inode.direct_block_pointers[i] != 0){
+                        Block new_block;
+                        read_disk(new_block, new_inode.direct_block_pointers[i]);
+                        new_inode.direct_block_pointers[i]=get_free_block();
+                        write_to_disk(new_block, BLOCK_SIZE ,new_inode.direct_block_pointers[i]);
+                    }
+                }
+                updateInode(new_inode, temp_inode);
+            }
+
+
+        }
+    }
+
+    return rc;
+}
+
+// copy files
+int FileSystem::my_mv(string src_file, string dst_file) {
+    int rc = -1;
+    
+
+    //check if the file exists in the FS
+    const char* fs_file = src_file.c_str();
+    for (int i = 0; i < 16; i++){
+        if (strcmp(wd.dirEntries[i].name, fs_file) == 0) {
+            rc = wd.dirEntries[i].inodeNumber;
+            
+            break;
+        }
+    }
+
+    if (rc != -1){
+        Inode og_inode;
+        readInode(og_inode, rc);
+        
+        // file is type directory
+        if (og_inode.Mode[0] == '0'){
+            rc = -2;
+        }
+
+        else {
+            Inode new_inode;
+            readInode(new_inode, rc);
+            //loop to correct file
+            vector<string> components = path_parse(dst_file);
+
+            int nameFound = 0;
+            int temp_block_num;
+            directory temp;
+            //check if is absolute path
+            if (dst_file[0] == '/') {
+                //Remove the first empty element in the vector
+                components.erase(components.begin());
+                temp = rd;
+            }else{
+                temp = wd;
+            }
+
+            //loop through all the names starting from correct directory
+            for (const string& comp : components) {
+                    for(int i =0; i< 16; ++i){
+                        if(temp.dirEntries[i].inodeNumber != -1){
+                            Inode inode;
+                            readInode(inode, temp.dirEntries[i].inodeNumber);  
+                    
+                            if(temp.dirEntries[i].name==comp && inode.Mode[0]=='0'){
+                                nameFound = 1;
+                                temp_block_num = get_directory_block(temp, temp.dirEntries[i].inodeNumber);
+                                break;
+                            }
+                        }
+                    }
+                    //If name not found break
+                    if(!nameFound){
+                        rc = -1;
+                        nameFound=1;    // to mark difference of found
+                        break;
+                    }
+                    // Restart nameFound for next directory
+                    nameFound = 0;
+            }
+            //write the name of the copied file to the correct directory
+            if(!nameFound){
+                int temp_inode = get_free_inode();
+                for(int i =0; i<16;i++){
+                    if(temp.dirEntries[i].inodeNumber==-1){
+                        temp.dirEntries[i].inodeNumber = temp_inode;
+                        strcpy(temp.dirEntries[i].name, fs_file);
+                        write_to_disk(temp, sizeof(directory), temp_block_num);
+                        break;
+                    }
+                }
+
+                //!! Need to change for indirect path
+                for (int i = 0; i < 12; i++){
+                    if (new_inode.direct_block_pointers[i] != 0){
+                        Block new_block;
+                        read_disk(new_block, new_inode.direct_block_pointers[i]);
+                        new_inode.direct_block_pointers[i]=get_free_block();
+                        write_to_disk(new_block, BLOCK_SIZE ,new_inode.direct_block_pointers[i]);
+                    }
+                }
+                updateInode(new_inode, temp_inode);
+                    
+                my_rm(src_file);
+
+                }
+        }
+    }
+
+    return rc;
+}
+
+string FileSystem::who_am_i(){
+    string rc = users.name[current_user] + " " + to_string(users.uid[current_user]);
+    return rc;
 }
 
 
 //Just for testing
 void FileSystem::ps(){
-    
-    // Inode test;
-    // readInode(test, 0);
-    // directory test2;
-    // read_disk(test2, test.direct_block_pointers[0]);
-    // cout << test.direct_block_pointers[0] << endl;
-    // cout << test2.dirEntries[0].inodeNumber << endl;
-    // cout << test2.dirEntries[0].name[0] << endl;
-
-    // my_mkdir("f1");
-    // cout << wd.dirEntries[0].name;
-    // my_cd("f1");
-    // my_mkdir("f2");
-
-    my_mkdir("f1");
-    my_mkdir("f2");
-    my_ls();
-    terminate_File_System();
+//Parse the directory name
+    istringstream ss("1/2/3S");
+    string component;
+    vector<string> components;
+    while (std::getline(ss, component, '/')) {
+        components.push_back(component);
+    }
+    for (const string& comp : components) {
+        cout << comp << endl;
+    }
+    cout <<"done";
 }
 
 //******Server Side Code*******
@@ -688,9 +1374,11 @@ string *FileSystem::scan(char *parameter)
         if (str_param[i] == ' ')
         {
             j++;
+        } else{
+            identify[j] += str_param[i];
         }
 
-        identify[j] += str_param[i];
+
     }
 
     return identify;
@@ -700,6 +1388,8 @@ string *FileSystem::scan(char *parameter)
 string FileSystem::identify_function(string *prompt)
 {
     string rc;
+
+    if(signed_in){
     if (prompt[0] == "ls")
     {
         rc = my_ls();
@@ -724,24 +1414,145 @@ string FileSystem::identify_function(string *prompt)
 
     else if (prompt[0] == "mkdir")
     {
-        if (my_mkdir(prompt[1]) == "")
+        if(prompt[1] == ""){
+            rc = "No argument, please try again";
+        } else{
+            if (my_mkdir(prompt[1]) == -1)
+                {
+                    rc = "Directory not created";
+                }
+                else
+                {
+                    rc = "Directory created successfully " + prompt[1];
+            }
+        }
+    }
+        else if (prompt[0] == "rmdir")
+    {
+        if (prompt[1] == "")
         {
             rc = "No argument, please try again";
         }
         else
         {
-            rc = "Directory created successfully " + prompt[1];
+            if (my_rmdir(prompt[1]) == 0)
+            {
+                rc = "Directory not found";
+            }
+            else
+            {
+                rc = "Directory " + prompt[1] + " removed successfully";
+            }
         }
     }
 
-    else if (prompt[0] == "lcp")
+else if (prompt[0] == "lcp")
     {
         // rc = lcp(prompt[1]);
+        if (prompt[1] == "") {
+            rc = "No argument, please try again";
+        }
+        else {
+ 
+            char data[prompt[1].length()];
+            strcpy(data, prompt[1].c_str());
+            if (my_lcp(data) == -1){
+                string s(data);
+                rc = "File not found in host" + s;
+            }
+            else {
+                rc = "File successfully written on disk";
+            }
+        }
     }
 
     else if (prompt[0] == "Lcp")
     {
         // rc = Lcp(prompt[1]);
+        if (prompt[1] == "") {
+            rc = "No argument, please try again";
+        }
+        else {
+
+            char data[prompt[1].length()];
+            strcpy(data, prompt[1].c_str());
+            if (my_Lcp(data) == -1){
+                string s(data);
+                rc = "File not found in file system " + s;
+            }
+            else {
+                rc = "File successfully written to " + prompt[1];
+            }
+        }
+    }
+
+    else if (prompt[0] == "cat"){
+        //rc = cat(prompt[1]);
+        // prompt[1] = prompt[1].substr(1);
+        rc = my_cat(prompt[1]);
+    }
+
+    else if (prompt[0] == "ln"){
+        // prompt[1] = prompt[1].substr(1);
+        // prompt[2] = prompt[2].substr(1);
+        int temp = my_ln(prompt[1], prompt[2]);
+        if (temp == -1){
+            rc = prompt[1] + " or " + prompt[2] + "not found";
+        }
+        else if (temp > -1){
+            rc = "Hard link between " + prompt[1] + " and " + prompt[2] + " created";
+        }
+        else{
+            rc = "cant hard link directory";
+        }
+    }
+
+    else if (prompt[0] == "rm"){
+        // prompt[1] = prompt[1].substr(1);
+        if (my_rm(prompt[1]) == -1){
+            rc = "File not found";
+        }
+        else {
+            rc = "File successfully removed";
+        }
+    }
+
+    else if (prompt[0] == "cp"){
+
+        int temp = my_cp(prompt[1], prompt[2]);
+        if (temp == -1){
+            rc = prompt[1] + " or " + prompt[2] + "not found";
+        }
+        else if (temp > -1){
+            rc = "Copied " + prompt[1] + " to " + prompt[2];
+        }
+    }
+
+    else if (prompt[0] == "mv"){
+
+        int temp = my_mv(prompt[1], prompt[2]);
+        if (temp == -1){
+            rc = prompt[1] + " or " + prompt[2] + "not found";
+        }
+        else if (temp > -1){
+            rc = "Moved " + prompt[1] + " to " + prompt[2];
+        }
+    }
+    else if (prompt[0] == "whoami"){
+        rc = who_am_i();
+    }
+        else if (prompt[0] == "chown"){
+        int temp = my_chown(prompt[1], prompt[2]);
+
+        if (temp == -1){
+            rc = "Invalid Username";
+        }
+        else if (temp == 0){
+            rc = "Invalid Filename";
+        }
+        else if (temp == 1){
+            rc = prompt[1] + " now owns " + prompt[2];
+        }
     }
 
     else if (prompt[0] == "shutdown")
@@ -753,12 +1564,31 @@ string FileSystem::identify_function(string *prompt)
     {
         // rc = exit();
     }
+        else if (prompt[0] == "clear")
+    {
+        rc="";
+    }
 
     else
     {
         rc = "command not found";
     }
+    }else{
 
+    if(prompt[0] == "login"){
+        for(int i =0; i<6; i++){
+            if(prompt[1] ==users.name[i]){
+                signed_in = true;
+                current_user=i;
+                rc = "Login Successful";
+                break;
+            }
+        }
+
+    }else{
+        rc="Please login first";
+    }
+    }
     return rc;
 }
 
