@@ -69,6 +69,7 @@ class FileSystem
         directory wd; //working directory
         directory rd; //root directory
         string cwd;
+        int file_size;
         
         struct directory directoryTable[10]; //Table recording the opened directories
 
@@ -100,6 +101,13 @@ class FileSystem
         int my_mkdir(string directoryName);
         int my_cd(string directoryName);
         string my_ls();
+        int my_rmdir(string directoryName);
+        int my_lcp(char *host_file);
+        int my_Lcp(char *fs_file);
+        string my_cat(string file);
+        int my_ln(string src_file, string dst_file);
+        int my_rm(string file);
+        int my_cp(string src_file, string dst_file);
         vector<string> path_parse(string path);
 
         void ps(); //Just for testing
