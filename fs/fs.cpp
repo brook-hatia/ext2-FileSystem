@@ -87,7 +87,7 @@ void FileSystem::initialize_File_System()
         read_disk(wd, initDataBlock);
 
         // load users
-        read_disk(curr_user, 17);
+        read_disk(users, 17);
 
         atRoot = 1;
         currentDirectoryBlock = initDataBlock;
@@ -139,21 +139,27 @@ void FileSystem::initialize_File_System()
 
         users.name[0] = "root";
         users.uid[0] = 100;
+        users.permission_bits[0] = 7; // read/write/execute
 
         users.name[1] = "user1";
         users.uid[1] = 101;
+        users.permission_bits[1] = 1; // execute only
 
         users.name[2] = "user2";
         users.uid[2] = 102;
+        users.permission_bits[2] = 2; // write only
 
         users.name[3] = "user3";
         users.uid[3] = 103;
+        users.permission_bits[3] = 3; // write and execute
 
         users.name[4] = "user4";
         users.uid[4] = 104;
+        users.permission_bits[4] = 4; // read only
 
         users.name[5] = "user5";
         users.uid[5] = 105;
+        users.permission_bits[5] = 5; // read and execute
 
         write_to_disk(users, sizeof(User), 17);
 
@@ -995,7 +1001,7 @@ int FileSystem::my_rm(string file) {
                 if (inode.direct_block_pointers[i] != 0){
                     Block block;
                     read_disk(block, inode.direct_block_pointers[i]);
-                    strcpy(block.text, ""); // reset block data
+                    memset(block.text, '\0', BLOCK_SIZE); // empty the block data;
                     write_to_disk(block, sizeof(Block), inode.direct_block_pointers[i]); // write back to disk
                     bm.bmap[inode.direct_block_pointers[i]] = '0'; // reset block bitmap
                 }
@@ -1037,29 +1043,9 @@ int FileSystem::my_cp(string src_file, string dst_file) {
 
         else {
             Inode new_inode;
-            initialize_inode(new_inode, 0, 0, 0, "", 1, 1, 1); // reset inode
-            for (int i = 0; i < 12; i++){
-                if (og_inode.direct_block_pointers[i] != 0){
-                    Block new_block;
-                    int new_block_number = get_free_block();
-                    read_disk(new_block, og_inode.direct_block_pointers[i]); // then new_block has the old block's data
-                    write_to_disk(new_block, sizeof(Block), new_block_number); // write the copied block to a free block area
-                    new_inode.direct_block_pointers[i] = new_block_number; // add the new block to the new inode
-                }
-            }
+            readInode(new_inode, rc); // new inode copied data of old inode
 
-            // put the new inode in a free inode area
-            int free_inode_num = get_free_inode();
-            updateInode(new_inode, free_inode_num);
 
-            // add dst_file to the wd
-                for (int i = 0; i < 16; i++){
-                    if (wd.dirEntries[i].inodeNumber == -1){
-                        strcpy(wd.dirEntries[i].name, dst_file.c_str()); // add name
-                        wd.dirEntries[i].inodeNumber = free_inode_num;
-                        break;
-                    }
-                }
         }
     }
 
@@ -1126,6 +1112,64 @@ int FileSystem::my_mv(string src_file, string dst_file){
 
             im.imap[rc] = '0'; // reset the inode bitmap
             initialize_inode(og_inode, 0, 0, 0, "", 0, 0, 0); // reset the copied inode data
+        }
+    }
+
+    return rc;
+}
+
+int FileSystem::my_chown(string newowner, string filename) {
+    int rc = -1;
+
+    /*
+     ******************************** The following conditions should be met to change owner **************************************
+    - user is root
+    - need at least write access
+    - you are the owner of the file
+    */
+   
+   // check if user exists in FS
+   int user_pos = -1;
+    for (int i = 0; i < 6; i++){
+        if (strcmp(users.name[i].c_str(), newowner.c_str()) == 0){
+            user_pos = i;
+            rc++;
+            break;
+        }
+    }
+
+   //check if the file exists in the FS
+   int inode_num = 0;
+    const char* fs_file = filename.c_str();
+    for (int i = 0; i < 16; i++){
+        if (strcmp(wd.dirEntries[i].name, fs_file) == 0) {
+            inode_num = wd.dirEntries[i].inodeNumber;
+            rc++;
+            break;
+        }
+    }
+
+    // both the "newowner" and "filename" exist in FS
+    if (rc == 1){
+        // check if all of the above conditions are met
+        int check = 0;
+        Inode temp_inode;
+        readInode(temp_inode, inode_num);
+        if (users.uid[user_pos] == temp_inode.uid){
+            check++;
+        }
+
+        if (users.permission_bits[user_pos] == 2 || users.permission_bits[user_pos] == 3 || users.permission_bits[user_pos] == 7){
+            check++;
+        }
+
+        if (users.name[user_pos] == "root"){
+            check++;
+        }
+
+        // all conditions were met, change the uid to "newowner" uid
+        if (check == 3){
+            temp_inode.uid = users.uid[user_pos];
         }
     }
 
@@ -1403,10 +1447,10 @@ string FileSystem::identify_function(string *prompt)
     else if (prompt[0] == "cp"){
         // prompt[1] = prompt[1].substr(1);
         // prompt[2] = prompt[2].substr(1);
-        if (my_ln(prompt[1], prompt[2]) == -1){
+        if (my_cp(prompt[1], prompt[2]) == -1){
             rc = prompt[1] + " or " + prompt[2] + "not found";
         }
-        else if (my_ln(prompt[1], prompt[2]) > -1){
+        else if (my_cp(prompt[1], prompt[2]) > -1){
             rc = "Copied " + prompt[1] + " to " + prompt[2];
         }
     }
@@ -1443,11 +1487,11 @@ int FileSystem::sign_in(string name)
     int rc = -1;
 
     // read users
-    read_disk(curr_user, 17);
+    read_disk(users, 17);
 
     for (int i = 0; i < 6; i++)
     {
-        string tempstr = '0' + curr_user.name[i];
+        string tempstr = '0' + users.name[i];
         if (tempstr == name)
         {
             rc = 1;           // user exists on the disk
@@ -1461,5 +1505,5 @@ int FileSystem::sign_in(string name)
 
 string FileSystem::who_am_i()
 {
-    return curr_user.name[current_user];
+    return users.name[current_user];
 }
