@@ -617,7 +617,7 @@ int FileSystem::my_rmdir(string directoryName)
 
     // reset/initialize inode
     Inode inode;
-    initialize_inode(inode, 0, 0, 0, "0000", 0, 0, 0);
+    initialize_inode(inode, 0, 0, 0, "", 0, 0, 0);
     updateInode(inode, inode_number);
 
     // get block number
@@ -891,6 +891,7 @@ string FileSystem::my_cat(string file) {
         readInode(inode, inode_number);
 
         int steps = ceil(float(inode.file_size)/ 4096);
+        int temp_file_size = inode.file_size;
 
         // file is type directory
         if (inode.Mode[0] == '0'){
@@ -903,15 +904,16 @@ string FileSystem::my_cat(string file) {
                     // read_disk(block, inode.direct_block_pointers[i]);
 
                     // rc += block.text;
+                    int write_size = (temp_file_size < BLOCK_SIZE) ? temp_file_size : BLOCK_SIZE;
                     // fseek(pFile, i * BLOCK_SIZE, SEEK_SET);
-                    fwrite(block.text, 1, write_size, pFile);
+                    string newText(block.text, block.text + write_size);
+                    rc += newText;
+                    temp_file_size -= write_size;
 
-                file_size -= write_size;
-
-                // Break the loop if we have copied all the required bytes
-                if (file_size == 0) {
-                    break;
-                }
+                    // Break the loop if we have copied all the required bytes
+                    if (temp_file_size == 0) {
+                        break;
+                    }
                 }
             }
         }
