@@ -68,6 +68,7 @@ public:
     {
         string name[6];
         int uid[6];
+        int permission_bits[6];
     };
 
     struct File {
@@ -83,7 +84,7 @@ public:
     directory wd; // working directory
     directory rd; // root directory
 
-    User curr_user;
+    User users;
 
     string cwd;
 
@@ -133,6 +134,7 @@ public:
 
     int sign_in(string name); // searches user on disk and signs-in if user exists, else return -1;
     string who_am_i();        // returns name of signed-in user
+    int my_chown(string newowner, string filename); // change ownership of a file/directory
 
     void ps(); // Just for testing
 
