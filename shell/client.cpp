@@ -42,11 +42,15 @@ int main()
         {
             break;
         }
+            else if (sendMsg == "clear")
+        {
+            system("clear"); // clears client shell
+        }
 
         int writefd = write(socketfd, sendMsg.c_str(), (size_t)sendMsg.size()); // send message to server
         // cout << "\nwrite successful" << sendMsg;
 
-        char readMsg[4000]={}; // allocated space for receiving from server
+        char readMsg[65535]={}; // allocated space for receiving from server
         string s = (string)readMsg;
         int readfd = read(socketfd, readMsg, (size_t)sizeof(readMsg)); // receive message from server
         cout << "\nServer: " << readMsg << "\n";                       // read message from server
