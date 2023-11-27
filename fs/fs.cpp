@@ -730,18 +730,13 @@ string FileSystem::my_ls()
                 i++;
             }
         }
-        string owner = "0:0";
-        string owner_class = "root";
-        int file_size = new_inode.file_size;
-        string file_creation_date = new_inode.creation_time;
+        string uid = to_string(new_inode.uid);
 
-        string dir_name = wd.dirEntries[i].name;
-        outPut += file_type + permission_bits + " ";
-        outPut += dir_entries_count + " " + owner + " " + owner_class + " " + file_creation_date
-                 + " " + dir_name + "\n";
+        outPut += file_type + permission_bits + " " + uid + " " + new_inode.creation_time + " " + wd.dirEntries[i].name + "\n";
+        
     }
     if(flag){
-        outPut += "nothing here";
+        outPut = "nothing here";
     }
     return outPut;
 }
@@ -1131,9 +1126,9 @@ int FileSystem::my_chown(string newowner, string filename) {
    // check if user exists in FS
    int user_pos = -1;
     for (int i = 0; i < 6; i++){
-        if (strcmp(users.name[i].c_str(), newowner.c_str()) == 0){
+        if (users.name[i] == newowner){
             user_pos = i;
-            rc++;
+            rc = 0;
             break;
         }
     }
@@ -1144,36 +1139,44 @@ int FileSystem::my_chown(string newowner, string filename) {
     for (int i = 0; i < 16; i++){
         if (strcmp(wd.dirEntries[i].name, fs_file) == 0) {
             inode_num = wd.dirEntries[i].inodeNumber;
-            rc++;
+            rc = 1;
             break;
         }
     }
 
     // both the "newowner" and "filename" exist in FS
+    int check = 0;
     if (rc == 1){
         // check if all of the above conditions are met
-        int check = 0;
+        
         Inode temp_inode;
         readInode(temp_inode, inode_num);
         if (users.uid[user_pos] == temp_inode.uid){
             check++;
         }
+        cout << check;
 
-        if (users.permission_bits[user_pos] == 2 || users.permission_bits[user_pos] == 3 || users.permission_bits[user_pos] == 7){
+        if (users.permission_bits[user_pos] == 2 || users.permission_bits[user_pos] == 3 || users.permission_bits[current_user] == 7){
             check++;
         }
+        cout << check;
 
-        if (users.name[user_pos] == "root"){
+        if (users.name[current_user] == "root"){
             check++;
         }
+        cout << check;
 
         // all conditions were met, change the uid to "newowner" uid
-        if (check == 3){
+        if (check > 0){
             temp_inode.uid = users.uid[user_pos];
         }
+
+        updateInode(temp_inode, inode_num);
+        cout << check;
     }
 
-    return rc;
+   
+    return check;
 }
 
 // just for testing
@@ -1466,6 +1469,20 @@ string FileSystem::identify_function(string *prompt)
         {
             // prompt[1] = prompt[1].substr(1);
             rc = "1" + prompt[1]; // user found, send message with initial "1" which indicates user is signed in
+        }
+    }
+
+    else if (prompt[0] == "chown"){
+        int temp = my_chown(prompt[1], prompt[2]);
+
+        if (temp == -1){
+            rc = "Invalid Username";
+        }
+        else if (temp == 0){
+            rc = "Invalid Filename";
+        }
+        else if (temp == 1){
+            rc = prompt[1] + " now owns " + prompt[2];
         }
     }
 
