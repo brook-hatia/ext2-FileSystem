@@ -82,6 +82,15 @@ class FileSystem
         ~FileSystem();
 
 
+        //testing users
+        struct user{
+            int uid;
+            char name[20];
+        };
+        struct user users[5];
+        bool signed_in;
+
+
         bool check_disk();                    // check if disk exists
 
         int get_free_inode();                   // search for free inode
@@ -95,6 +104,7 @@ class FileSystem
         void read_disk(auto &x, int blockNum); // read inode with pointer[0] = str from the list of inodes on the disk
         void readInode(Inode &i, int inodeNum);
         void updateInode(Inode i, int inodeNum);
+        
 
         int get_directory_block(directory &dir, int inodeNum); //Gets the directory and returns block number
 
