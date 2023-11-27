@@ -4,7 +4,7 @@
 #include <string>
 #include <ctime>
 #include <chrono>
-# include <cmath>
+#include <cmath>
 #include <vector>
 #include <sstream>
 #include <sys/socket.h> //library for server-client communication
@@ -607,6 +607,189 @@ string FileSystem::my_ls()
 }
 
 
+// copy a host file to the current directory in the FS
+int FileSystem::my_lcp(char *host_file)
+{
+    int rc = -1;
+
+    FILE *pFile = fopen(host_file, "r+b");
+
+    if (pFile != NULL)
+    {
+        fseek(pFile, 0, SEEK_END);
+        long len = ftell(pFile);
+        file_size = len;
+        fseek(pFile, 0, SEEK_SET);
+
+        int num_of_blocks = ceil(float(len) / BLOCK_SIZE);
+        
+        Inode inode;
+        initialize_inode(inode, 0, 0, BLOCK_SIZE, "1777", 1, 1, 1);
+        int inodeNum = get_free_inode();
+        rc = inodeNum;
+
+        int file_name_len = strlen(host_file);
+        for (int i = 0; i < 16; i++){
+            if (wd.dirEntries[i].inodeNumber == -1){
+                wd.dirEntries[i].inodeNumber = rc;
+                
+                if (file_name_len <= 250){
+                    strcpy(wd.dirEntries[i].name, string(host_file).c_str());
+                }
+                else {
+                    perror("file name exceeded 250");
+                    exit(1);
+                }
+                break;
+            }
+        }
+
+        // update inode's file_size attribute
+        inode.file_size = len;
+
+        int temp_file_size = file_size;
+        for (int i = 0; i < num_of_blocks; i++)
+        {
+            int write_size = (temp_file_size < BLOCK_SIZE) ? temp_file_size : BLOCK_SIZE;
+
+            // Read the file in chunks
+            char buffer[BLOCK_SIZE];
+            memset(buffer, 0, BLOCK_SIZE);
+            // fseek(pFile, i * BLOCK_SIZE, SEEK_SET);
+            fread(buffer, 1, write_size, pFile);
+
+            Block block;
+            // strncpy(block.text, buffer, BLOCK_SIZE);
+            memcpy(block.text, buffer, BLOCK_SIZE);
+
+            // Get a free block and write the block to disk
+            int blockNum = get_free_block();
+            write_to_disk(block, sizeof(Block), blockNum);
+
+            //save block numbers on the inode
+            if (i < 12){
+                inode.direct_block_pointers[i] = blockNum;
+            }
+
+            temp_file_size -= write_size;
+        }
+
+        updateInode(inode, inodeNum);
+
+        fclose(pFile);
+    }
+
+    return rc;
+}
+
+// copy a FS file from the current directory to the current directory in the host system
+int FileSystem::my_Lcp(char *fs_file)
+{
+    int rc = -1; // rc here is the inode number of fs_file
+
+    // check if fs_file exists on disk
+    for (int i = 0; i < 16; i++) {
+        if (strcmp(wd.dirEntries[i].name, fs_file) == 0) {
+            rc = wd.dirEntries[i].inodeNumber;
+            break;
+        }
+    }
+
+    if (rc != -1) {
+        string str_file_name = "export_" + string(fs_file);
+        // str_file_name += ".txt";
+
+        FILE *pFile = fopen(str_file_name.c_str(), "a+b");
+
+        Inode inode;
+        readInode(inode, rc);
+
+        int steps = ceil(float(file_size)/ 4096);
+
+        for (int i = 0; i < 12 && i < steps; i++) {
+            if (inode.direct_block_pointers[i] != 0) {
+                Block block;
+                read_disk(block, inode.direct_block_pointers[i]);
+
+                int write_size = (file_size < BLOCK_SIZE) ? file_size : BLOCK_SIZE;
+
+                // fseek(pFile, i * BLOCK_SIZE, SEEK_SET);
+                fwrite(block.text, 1, write_size, pFile);
+
+                file_size -= write_size;
+
+                // Break the loop if we have copied all the required bytes
+                if (file_size == 0) {
+                    break;
+                }
+            }
+        }
+
+
+        fclose(pFile);
+    }
+
+    return rc;
+}
+
+//function to remove directory
+int FileSystem::my_rmdir(string directoryName)
+{
+    int flag = 0;         // directory doesn't exist
+    int inode_number = 0; // directoryName's inode number
+    for (int i = 0; i < 16; i++)
+    {
+        if (wd.dirEntries[i].inodeNumber == -1)
+        {
+            break;
+        }
+
+        if (wd.dirEntries[i].name == directoryName)
+        {
+            flag = 1;                                    // directory exists
+            inode_number = wd.dirEntries[i].inodeNumber; // get directoryName's inode number
+            cout << wd.dirEntries[i].name;
+            wd.dirEntries[i].inodeNumber = -1; // reset inodeNumber;
+            break;
+        }
+    }
+
+    // reset/initialize inode
+    Inode inode;
+    initialize_inode(inode, 0, 0, 0, "0000", 0, 0, 0);
+    updateInode(inode, inode_number);
+
+    // get block number
+    directory dir;
+    int block_number = get_directory_block(dir, inode_number);
+    read_disk(dir, inode_number);
+
+    // reset the directory entries
+    for (int i = 0; i < 16; ++i)
+    {
+        dir.dirEntries[i].inodeNumber = -1;
+    }
+
+    // update block bitmap and inode bitmap
+    bm.bmap[block_number] = '0';
+    im.imap[inode_number] = '0';
+
+    // Write working directory back to disk
+    write_to_disk(dir, sizeof(directory), inode.direct_block_pointers[0]);
+    write_to_disk(wd, sizeof(directory), initDataBlock);
+    write_to_disk(bm, sizeof(blockBitmap), 0);
+    write_to_disk(im, sizeof(iNodeBitmap), 1);
+
+    // directory doesn't exist
+    if (!flag)
+    {
+        cout << "Directory not found" << endl;
+    }
+
+    return flag;
+}
+
+
 //Just for testing
 void FileSystem::ps(){
 //Parse the directory name
@@ -745,14 +928,82 @@ string FileSystem::identify_function(string *prompt)
         }
     }
 
-    else if (prompt[0] == "lcp")
+else if (prompt[0] == "lcp")
     {
         // rc = lcp(prompt[1]);
+        if (prompt[1] == "") {
+            rc = "No argument, please try again";
+        }
+        else {
+ 
+            char data[prompt[1].length()];
+            strcpy(data, prompt[1].c_str());
+            if (my_lcp(data) == -1){
+                string s(data);
+                rc = "File not found in host" + s;
+            }
+            else {
+                rc = "File successfully written on disk";
+            }
+        }
     }
 
     else if (prompt[0] == "Lcp")
     {
         // rc = Lcp(prompt[1]);
+        if (prompt[1] == "") {
+            rc = "No argument, please try again";
+        }
+        else {
+
+            char data[prompt[1].length()];
+            strcpy(data, prompt[1].c_str());
+            if (my_Lcp(data) == -1){
+                string s(data);
+                rc = "File not found in file system " + s;
+            }
+            else {
+                rc = "File successfully written to " + prompt[1];
+            }
+        }
+    }
+
+        else if (prompt[0] == "cat"){
+        //rc = cat(prompt[1]);
+        // prompt[1] = prompt[1].substr(1);
+        rc = my_cat(prompt[1]);
+    }
+
+    else if (prompt[0] == "ln"){
+        // prompt[1] = prompt[1].substr(1);
+        // prompt[2] = prompt[2].substr(1);
+        if (my_ln(prompt[1], prompt[2]) == -1){
+            rc = prompt[1] + " or " + prompt[2] + "not found";
+        }
+        else if (my_ln(prompt[1], prompt[2]) > -1){
+            rc = "Hard link between " + prompt[1] + " and " + prompt[2] + " created";
+        }
+    }
+
+    else if (prompt[0] == "rm"){
+        // prompt[1] = prompt[1].substr(1);
+        if (my_rm(prompt[1]) == -1){
+            rc = "File not found";
+        }
+        else {
+            rc = "File successfully removed";
+        }
+    }
+
+    else if (prompt[0] == "cp"){
+        // prompt[1] = prompt[1].substr(1);
+        // prompt[2] = prompt[2].substr(1);
+        if (my_ln(prompt[1], prompt[2]) == -1){
+            rc = prompt[1] + " or " + prompt[2] + "not found";
+        }
+        else if (my_ln(prompt[1], prompt[2]) > -1){
+            rc = "Copied " + prompt[1] + " to " + prompt[2];
+        }
     }
 
     else if (prompt[0] == "shutdown")
