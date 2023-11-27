@@ -12,7 +12,6 @@
 #include <unistd.h>     //for close()
 #include <fstream>
 #include "fs.h"
-using namespace std;
 
 FileSystem::FileSystem()
 {
@@ -20,7 +19,6 @@ FileSystem::FileSystem()
 
 FileSystem::~FileSystem()
 {
-    
 }
 
 // Reads data from disk and store in a structure
@@ -481,8 +479,6 @@ int FileSystem::my_mkdir(string directoryName)
         new_dir.dirEntries[i].inodeNumber = -1;
     }
 
-    cout << "test 3" << endl;
-
     if(atRoot){
         // write working directory to disk
         write_to_disk(wd, sizeof(directory), initDataBlock);
@@ -491,10 +487,7 @@ int FileSystem::my_mkdir(string directoryName)
         write_to_disk(wd, sizeof(directory), currentDirectoryBlock);   
     }
 
-    cout << "test 4" << endl;
-
     write_to_disk(new_dir, sizeof(directory), inode.direct_block_pointers[0]);
-    cout << "test 5" << endl;
 
     return rc;
 }
@@ -609,7 +602,7 @@ int FileSystem::my_rmdir(string directoryName)
         {
             flag = 1;                                    // directory exists
             inode_number = wd.dirEntries[i].inodeNumber; // get directoryName's inode number
-            cout << wd.dirEntries[i].name;
+            // cout << wd.dirEntries[i].name;
             wd.dirEntries[i].inodeNumber = -1; // reset inodeNumber;
             break;
         }
@@ -644,7 +637,7 @@ int FileSystem::my_rmdir(string directoryName)
     // directory doesn't exist
     if (!flag)
     {
-        cout << "Directory not found" << endl;
+        std::cout << "Directory not found" << endl;
     }
 
     return flag;
@@ -654,8 +647,11 @@ string FileSystem::my_ls()
 {
     string outPut = "";
     int flag = 1;
+    int total_block_count = 0;
     // does equivalent of `ls -l`
-    // format: {filetype}{permission bits} {dirEntries.size()} {owner} {root/staff?} {file size} {creation date} {dirEntries[i].name}
+    /* format: total {block_count}
+               {filetype}{permission bits} {dirEntries.size()} {owner} {root/staff?} {file size} {modified date} {dirEntries[i].name} 
+    */
     for (int i = 0; i < 16; i++)
     {
         if (wd.dirEntries[i].inodeNumber == -1)
@@ -665,6 +661,9 @@ string FileSystem::my_ls()
         flag = 0;
         Inode new_inode;
         readInode(new_inode, wd.dirEntries[i].inodeNumber);
+
+        // increment block_count
+        total_block_count += new_inode.block_count;
 
         // process the mode. 0777
 
@@ -730,15 +729,27 @@ string FileSystem::my_ls()
                 i++;
             }
         }
-        string uid = to_string(new_inode.uid);
+        
+        // get user through inode's uid
+        string owner = "";
+        int uid = new_inode.uid;
+        for (int i = 0; i < 6; i++){
+            if (users.uid[i] == new_inode.uid){
+                owner = users.name[i];
+                break;
+            }
+        }
 
-        outPut += file_type + permission_bits + " " + uid + " " + new_inode.creation_time + " " + wd.dirEntries[i].name + "\n";
+        outPut += file_type + permission_bits + " " + to_string(new_inode.link_count + 1) + " " + owner + " " + to_string(new_inode.file_size) + " " + new_inode.modified_time + " " + wd.dirEntries[i].name + "\n";
         
     }
     if(flag){
         outPut = "nothing here";
     }
-    return outPut;
+
+    string final_output = "total " + to_string(total_block_count) + "\n";
+    final_output += outPut;
+    return final_output;
 }
 
 // copy a host file to the current directory in the FS
@@ -759,6 +770,10 @@ int FileSystem::my_lcp(char *host_file)
         
         Inode inode;
         initialize_inode(inode, 0, 0, BLOCK_SIZE, "1777", 1, 1, 1);
+        
+        // assign uid to the file
+        inode.uid = users.uid[current_user];
+
         int inodeNum = get_free_inode();
         rc = inodeNum;
 
@@ -795,6 +810,9 @@ int FileSystem::my_lcp(char *host_file)
             Block block;
             // strncpy(block.text, buffer, BLOCK_SIZE);
             memcpy(block.text, buffer, BLOCK_SIZE);
+
+            //increment inode's block count
+            inode.block_count++;
 
             // Get a free block and write the block to disk
             int blockNum = get_free_block();
@@ -860,10 +878,8 @@ int FileSystem::my_Lcp(char *fs_file)
         }
 
         fclose(pFile);
-        
     }
     
-
     return rc;
 }
 
@@ -1151,7 +1167,7 @@ int FileSystem::my_chown(string newowner, string filename) {
         
         Inode temp_inode;
         readInode(temp_inode, inode_num);
-        if (users.uid[user_pos] == temp_inode.uid){
+        if (users.uid[current_user] == temp_inode.uid){
             check++;
         }
         cout << check;
@@ -1166,7 +1182,7 @@ int FileSystem::my_chown(string newowner, string filename) {
         }
         cout << check;
 
-        // all conditions were met, change the uid to "newowner" uid
+        // if any one of the conditions are met, change the uid to "newowner" uid
         if (check > 0){
             temp_inode.uid = users.uid[user_pos];
         }
