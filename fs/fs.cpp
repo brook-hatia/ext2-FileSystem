@@ -40,6 +40,7 @@ FileSystem::FileSystem(){
         users.uid[5] = 105;
         users.permission_bits[5] = 5; // read and execute
         signed_in = 0;
+
 }
 
 FileSystem::~FileSystem(){
@@ -247,6 +248,7 @@ void FileSystem::updateInode(Inode i, int inodeNum){
 
     fclose(pFile);
 
+
 }
 
 // When File System Terminate stores everything back to disk
@@ -396,6 +398,13 @@ void FileSystem::initialize_inode(Inode &inode, int uid,
             if(modTime!=-1){
                 std::strftime(inode.modified_time, sizeof(inode.modified_time), "%d%b%H:%M:%S", localTime);
             }
+
+            // Set indirect_block_address and direct_block_pointers to an appropriate value (0)
+            inode.indirect_block_address = -1;
+            for (int j = 0; j < 12; ++j) {
+                inode.direct_block_pointers[j] = 0;
+            }
+
 
 }
 
@@ -809,6 +818,7 @@ int FileSystem::my_lcp(char *host_file)
             //save block numbers on the inode
             if (i < 12){
                 inode.direct_block_pointers[i] = blockNum;
+                cout << "block number used:" << inode.direct_block_pointers[i];
             }
 
             temp_file_size -= write_size;
@@ -816,8 +826,11 @@ int FileSystem::my_lcp(char *host_file)
 
         updateInode(inode, inodeNum);
 
+
         fclose(pFile);
     }
+
+
 
     return rc;
 }
@@ -1077,22 +1090,21 @@ int FileSystem::my_rm(string file) {
         Inode inode;
         
         readInode(inode, rc);
-
-  //Really dont know why this cant work      
-        // if (inode.link_count == 0){
-        //     cout << "works";
-        //     // clear the block bit map need to change for double indirect address!!
-        //     for (int i = 0; i < 12; i++){
-        //         if (inode.direct_block_pointers[i] != 0){
-        //             // Block block;
-        //             // read_disk(block, inode.direct_block_pointers[i]);
-        //             // //strcpy(block.text, ""); // reset block data
-        //             // write_to_disk(block, sizeof(Block), inode.direct_block_pointers[i]); // write back to disk
-        //             bm.bmap[inode.direct_block_pointers[i]] = '0'; // reset block bitmap
-        //             inode.direct_block_pointers[i] = 0;
-        //         }
-        //     }
-        // }
+  
+        if (inode.link_count == 0){
+           
+            // clear the block bit map need to change for double indirect address!!
+            for (int i = 0; i < 12; i++){
+                if (inode.direct_block_pointers[i] != 0){
+                    // Block block;
+                    // read_disk(block, inode.direct_block_pointers[i]);
+                    // //strcpy(block.text, ""); // reset block data
+                    // write_to_disk(block, sizeof(Block), inode.direct_block_pointers[i]); // write back to disk
+                    bm.bmap[inode.direct_block_pointers[i]] = '0'; // reset block bitmap
+                    inode.direct_block_pointers[i] = 0;
+                }
+            }
+        }
 
         // update the inode data
         strcpy(wd.dirEntries[pos_in_wd].name, ""); // remove name
@@ -1376,7 +1388,9 @@ void FileSystem::start_server(){
 
         if (sendMsg == "shutdown")
         {
+            cout << "terminated";
             terminate_File_System();
+
             break;
         }
 
@@ -1585,7 +1599,7 @@ else if (prompt[0] == "lcp")
 
     else if (prompt[0] == "shutdown")
     {
-        // rc = shutdown();
+        //rc = "shutdown";
     }
 
     else if (prompt[0] == "exit")
