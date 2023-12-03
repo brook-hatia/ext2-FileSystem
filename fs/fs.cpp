@@ -97,11 +97,14 @@ void FileSystem::initialize_File_System(){
 
     // Check if Disk Already exists if not initialize the disk
     if ((pFile = fopen ("disk", "r"))){
+       
         fclose(pFile);
-        initDataBlock = 17 + TOTAL_INODE_NUM/32;
+        initDataBlock = 129 + TOTAL_INODE_NUM/32;
         // Load Inode and Block Bitmap from disk
         read_disk(bm, 0);
-        read_disk(im, 16);
+    
+        read_disk(im, 128);
+        
         // Get Root directory and working directory
         read_disk(rd, initDataBlock);
         read_disk(wd, initDataBlock);
@@ -129,7 +132,7 @@ void FileSystem::initialize_File_System(){
         }
         
         // Mark block used by the bit maps and inode
-        for (int i = 0; i< 17+TOTAL_INODE_NUM/32; ++i){
+        for (int i = 0; i< 129 +TOTAL_INODE_NUM/32; ++i){
             bm.bmap[i] = '1';
         }
         write_to_disk(bm, sizeof(blockBitmap), 0);
@@ -140,7 +143,7 @@ void FileSystem::initialize_File_System(){
         }
 
 
-        write_to_disk(im, sizeof(iNodeBitmap), 16);
+        write_to_disk(im, sizeof(iNodeBitmap), 128);
 
         cwd= "/";
 
@@ -154,14 +157,14 @@ void FileSystem::initialize_File_System(){
 
             // Set the entire Mode array to 0
             for (int j = 0; j < 12; ++j) {
-                inodeArray[i].Mode[j] = 0;
+                inodeArray[i].Mode[j] = '0';
             }
 
             // Set the entire creation_time, modified_time, and read_time arrays to 0
             for (int j = 0; j < 14; ++j) {
-                inodeArray[i].creation_time[j] = 0;
-                inodeArray[i].modified_time[j] = 0;
-                inodeArray[i].read_time[j] = 0;
+                inodeArray[i].creation_time[j] = '0';
+                inodeArray[i].modified_time[j] = '0';
+                inodeArray[i].read_time[j] = '0';
             }
 
             // Set indirect_block_address and direct_block_pointers to an appropriate value (0)
@@ -173,7 +176,7 @@ void FileSystem::initialize_File_System(){
 
         //Write the inodes to disk
         pFile = fopen ("disk", "r+b");
-        fseek(pFile, 17*BLOCK_SIZE , SEEK_SET);
+        fseek(pFile, 129*BLOCK_SIZE , SEEK_SET);
         int len = sizeof(inodeArray);
         char inode_buff[len];
         memset(inode_buff, 0, len);
@@ -181,7 +184,7 @@ void FileSystem::initialize_File_System(){
         fwrite(inode_buff, sizeof(char), len, pFile);
         fclose(pFile);
 
-        initDataBlock = 17 + TOTAL_INODE_NUM/32;
+        initDataBlock = 129 + TOTAL_INODE_NUM/32;
         currentDirectoryBlock = initDataBlock;
         // Initialize root directory and write to disk
         for(int i =0; i< 16; ++i){
@@ -193,6 +196,7 @@ void FileSystem::initialize_File_System(){
         initialize_inode(rootInode, 0, 0, BLOCK_SIZE, "0777", 1, 1, 1);
         updateInode(rootInode, 0);
         im.imap[0] = '1';
+       
 
         write_to_disk(wd, sizeof(directory), initDataBlock);
         rd = wd;
@@ -206,7 +210,7 @@ void FileSystem::readInode(Inode &i, int inodeNum){
 
     //Calculatte inode position in Bytes
     //int inode_position = 2*BLOCK_SIZE + inodeNum/32*BLOCK_SIZE + inodeNum/32*128;
-    int inode_position = 17*BLOCK_SIZE + inodeNum*128;
+    int inode_position = 129*BLOCK_SIZE + inodeNum*128;
 
     //get to the correct Inode position
     fseek(pFile, inode_position, SEEK_SET);
@@ -239,7 +243,7 @@ void FileSystem::updateInode(Inode i, int inodeNum){
 
     //Calculatte inode position in Bytes
     //int inode_position = 2*BLOCK_SIZE + inodeNum/32*BLOCK_SIZE + inodeNum/32*128;
-    int inode_position = 17*BLOCK_SIZE + inodeNum*128;
+    int inode_position = 129*BLOCK_SIZE + inodeNum*128;
     //get to the correct Inode position
     fseek(pFile, inode_position, SEEK_SET);
 
@@ -255,7 +259,7 @@ void FileSystem::updateInode(Inode i, int inodeNum){
 void FileSystem::terminate_File_System(){
 
     write_to_disk(bm, sizeof(blockBitmap), 0);
-    write_to_disk(im, sizeof(iNodeBitmap), 16);
+    write_to_disk(im, sizeof(iNodeBitmap), 128);
 
 }
 
@@ -440,6 +444,7 @@ int FileSystem::my_mkdir(string directoryName)
 
     if(atRoot){
         // write working directory to disk
+    
         write_to_disk(wd, sizeof(directory), initDataBlock);
         rd = wd;//update root directory
     } else {
@@ -709,17 +714,17 @@ string FileSystem::my_ls()
         }
 
         // read block
-        directory new_dir;
-        read_disk(new_dir, new_inode.direct_block_pointers[0]);
-        int dir_entries_count = 0;
+        // directory new_dir;
+        // read_disk(new_dir, new_inode.direct_block_pointers[0]);
+        // int dir_entries_count = 0;
 
-        //Loop to get number of file in subdirectory
-        for (int j = 0; j < 16; j++){
-            if (new_dir.dirEntries[j].inodeNumber == -1){
-                break;
-                i++;
-            }
-        }
+        // //Loop to get number of file in subdirectory
+        // for (int j = 0; j < 16; j++){
+        //     if (new_dir.dirEntries[j].inodeNumber == -1){
+        //         break;
+        //         i++;
+        //     }
+        // }
         
         // get user through inode's uid
         string owner = "";
@@ -1344,8 +1349,18 @@ string FileSystem::who_am_i(){
 
 //Just for testing
 void FileSystem::ps(){
-//Parse the directory name
+    // directory dir;
+    // cout << dir.dirEntries[0].inodeNumber << endl;
+    // cout << dir.dirEntries[0].name << endl;
+
+    // dir.dirEntries[0].inodeNumber = 10;
     
+    // write_to_disk(dir,sizeof(directory),initDataBlock);
+    //my_mkdir("test");
+    // cout << wd.dirEntries[0].inodeNumber;
+    // cout << wd.dirEntries[0].name;
+
+    //cout <<im.imap[0];
 
 }
 
@@ -1396,7 +1411,7 @@ void FileSystem::start_server(){
 
             if (strcmp(readMsg, "shutdown") == 0)
             {
-                //terminate_File_System();
+                terminate_File_System();
                 server_run = true; // Set the flag to true to break the outer loop
                 break;             // Break the inner loop
             }
