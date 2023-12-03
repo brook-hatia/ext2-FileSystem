@@ -25,21 +25,9 @@ int main()
 
     cout << "connection successful" << endl;
 
-    bool signed_in = false;
-    string cwd = "";
-
     while (true)
     {
-        if (!signed_in)
-        {
-            cout << "User name: ";
-        }
-
-        else
-        {
-            cout << cwd << "->";
-        }
-
+        cout << "->";
         string sendMsg;
         getline(cin, sendMsg);
 
@@ -63,45 +51,13 @@ int main()
             system("clear"); // clears client shell
         }
 
-        cwd = "";
-
-        if (!signed_in)
-        {
-            sendMsg = '0' + sendMsg;
-        }
-
         // Send message to the server
         write(socketfd, sendMsg.c_str(), sendMsg.size());
 
         // Receive and display the server's response
         char readMsg[4000] = {};
         int readfd = read(socketfd, readMsg, sizeof(readMsg));
-        cout << "Server: " << readMsg << endl;
-
-        string s(readMsg);
-
-        if (s[0] == '1')
-        {
-            cout << "signed in" << endl;
-            signed_in = true;
-        }
-
-        int begin = 0;
-        for (int i = 0; i < s.size(); i++)
-        {
-            if (s[i] == '.')
-            {
-                begin = i + 1;
-                break; // '.' found, exit loop
-            }
-        }
-
-        for (int i = begin; i < s.size(); i++)
-        {
-            cwd += s[i];
-        }
-
-        // std::cout << "cwd: " << cwd << std::endl;
+        cout << "Server: " << readMsg;
     }
 
     close(socketfd); // Close the client socket before exiting

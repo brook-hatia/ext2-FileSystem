@@ -11,6 +11,7 @@
 #include <netinet/in.h> //for serveaddr_in which is used for IPv4
 #include <unistd.h>     //for close()
 #include <fstream>
+#include <regex>
 #include "fs.h"
 
 FileSystem::FileSystem()
@@ -290,8 +291,6 @@ int FileSystem::get_free_inode()
         }
     }
 
-    terminate_File_System();
-
     return rc;
 }
 
@@ -309,8 +308,6 @@ int FileSystem::get_free_block()
             break;
         }
     }
-
-    terminate_File_System();
 
     return rc;
 }
@@ -343,8 +340,6 @@ int FileSystem::get_eight_free_block()
             consecutiveBlocks = 0;
         }
     }
-
-    terminate_File_System();
 
     return rc;
 }
@@ -466,8 +461,18 @@ int FileSystem::my_mkdir(string directoryName)
         if (wd.dirEntries[i].inodeNumber == -1)
         {
             rc = 1;
-            strcpy(wd.dirEntries[i].name, directoryName.c_str()); // add name
-            wd.dirEntries[i].inodeNumber = inodeNum;              // add inode number
+            
+            // add name
+            for (int j = 0; j < directoryName.size() - 1; j++){
+                wd.dirEntries[i].name[j] = directoryName[i];
+            }
+
+            wd.dirEntries[0].name = strdup(directoryName.c_str());
+            wd.dirEntries[i].inodeNumber = inodeNum;            // add inode number
+            delete[] wd.dirEntries[0].name;
+            for (int i = 0; i < 16; ++i) {
+                delete[] wd.dirEntries[i].name;
+            }
             break;
         }
     }
@@ -897,6 +902,8 @@ string FileSystem::my_cat(string file) {
         }
     }
 
+    delete[] fs_file;
+
     if (inode_number != -1) {
         Inode inode;
         readInode(inode, inode_number);
@@ -1198,8 +1205,12 @@ int FileSystem::my_chown(string newowner, string filename) {
 // just for testing
 void FileSystem::ps()
 {
-    int a = my_lcp("file.txt");
-    cout << ceil(float(file_size)/BLOCK_SIZE);
+    // char *s = "  zero   one   two       three      four       five";
+    
+    // string *str = scan(s);
+
+    // cout << to_string(str->length());
+    my_mkdir("file");
 }
 
 //******Server Side Code*******
@@ -1247,10 +1258,9 @@ void FileSystem::start_server()
                 break;
             }
 
-            cout << "Client: " << readMsg << endl;
-
             if (strcmp(readMsg, "shutdown") == 0)
             {
+                terminate_File_System();
                 server_run = true; // Set the flag to true to break the outer loop
                 break;             // Break the inner loop
             }
@@ -1261,7 +1271,7 @@ void FileSystem::start_server()
             // scan the read message for function name, filename/path
             string *contents = scan(readMsg);
             // string sendMsg = cwd + " " + identify_function(contents);
-            string sendMsg = identify_function(contents) + '.' + cwd;
+            string sendMsg = identify_function(contents) + '\n' + cwd;
             write(acceptfd, sendMsg.c_str(), (size_t)sendMsg.size()); // send message to client
         }
     }
@@ -1272,55 +1282,33 @@ void FileSystem::start_server()
 // call appropriate functions from prompt
 string *FileSystem::scan(char *parameter)
 {
-    //only for functions that take in unlimited prompt
-    // int prompt_length = 0;
-    string str_param(parameter);      // convert char array to string
-    // for (int i = 0; i < str_param.length(); i++){
-    //     if (str_param[i] == ' '){
-    //         prompt_length++;
-    //     }
-    // }
-    // prompt_len = prompt_length;
+    string str(parameter);
 
-    // prompt_files = new string[prompt_len];
-    // int first_space = str_param.find(' ');
-    // int k = 0;
-    // for (int i = 0; i < str_param.length(); i++){
-    //     if (str_param[i] == ' '){
-    //         k++;
-    //     }
-    //     prompt_files[k] = str_param[i];
-    // }
+    //trim left spaces
+    regex left_pattern("^\\s+");
+    str = regex_replace(str, left_pattern, "");
 
-    ///////////
+    //trim right spaces
+    regex right_pattern("\\s+$");
+    str = regex_replace(str, right_pattern, "");
 
+    //trim extra inner spaces
+    regex inner_pattern("\\s+");
+    str = regex_replace(str, inner_pattern, " ");
 
-    string *identify = new string[3]; // string[0] = function name, string[1] and string[2] = filenames/pathnames
+    // append words to string array
+    string *prompts = new string[str.size()];
     int j = 0;
-
-    // user is not signed in
-    if (str_param[0] == '0')
-    {
-        identify[0] = "sign_in";
-        j = 1;
-    }
-
-    // user is signed in
-    for (int i = 0; i < str_param.size(); i++)
-    {
-        if (str_param[i] == ' ')
-        {
+    for (int i = 0; i < str.size(); i++){
+        if (str[i] == ' '){
             j++;
         }
         else {
-            identify[j] += str_param[i];
+            prompts[j] += str[i];
         }
-        
     }
 
-    // prompt_files = identify;
-
-    return identify;
+    return prompts;
 }
 
 // identify function names from filenames/paths
@@ -1396,13 +1384,10 @@ string FileSystem::identify_function(string *prompt)
 
     else if (prompt[0] == "lcp")
     {
-        // rc = lcp(prompt[1]);
         if (prompt[1] == "") {
             rc = "No argument, please try again";
         }
         else {
-            // prompt[1] = prompt[1].substr(1);
-
             char data[prompt[1].length()];
             strcpy(data, prompt[1].c_str());
             if (my_lcp(data) == -1){
@@ -1417,7 +1402,6 @@ string FileSystem::identify_function(string *prompt)
 
     else if (prompt[0] == "Lcp")
     {
-        // rc = Lcp(prompt[1]);
         if (prompt[1] == "") {
             rc = "No argument, please try again";
         }
@@ -1437,14 +1421,10 @@ string FileSystem::identify_function(string *prompt)
     }
 
     else if (prompt[0] == "cat"){
-        //rc = cat(prompt[1]);
-        // prompt[1] = prompt[1].substr(1);
         rc = my_cat(prompt[1]);
     }
 
     else if (prompt[0] == "ln"){
-        // prompt[1] = prompt[1].substr(1);
-        // prompt[2] = prompt[2].substr(1);
         if (my_ln(prompt[1], prompt[2]) == -1){
             rc = prompt[1] + " or " + prompt[2] + "not found";
         }
@@ -1454,7 +1434,6 @@ string FileSystem::identify_function(string *prompt)
     }
 
     else if (prompt[0] == "rm"){
-        // prompt[1] = prompt[1].substr(1);
         if (my_rm(prompt[1]) == -1){
             rc = "File not found";
         }
@@ -1464,27 +1443,15 @@ string FileSystem::identify_function(string *prompt)
     }
 
     else if (prompt[0] == "cp"){
-        // prompt[1] = prompt[1].substr(1);
-        // prompt[2] = prompt[2].substr(1);
-        if (my_cp(prompt[1], prompt[2]) == -1){
-            rc = prompt[1] + " or " + prompt[2] + "not found";
-        }
-        else if (my_cp(prompt[1], prompt[2]) > -1){
-            rc = "Copied " + prompt[1] + " to " + prompt[2];
-        }
-    }
+        int src_len = prompt->length() - 1;
 
-    else if (prompt[0] == "sign_in")
-    {
-        if (sign_in(prompt[1]) == -1)
-        {
-            // prompt[1] = prompt[1].substr(1);
-            rc = "User " + prompt[1] + " not found";
-        }
-        else
-        {
-            // prompt[1] = prompt[1].substr(1);
-            rc = "1" + prompt[1]; // user found, send message with initial "1" which indicates user is signed in
+        for (int i = 0; i < src_len; i++){
+            if (my_cp(prompt[i], prompt[2]) == -1){
+                rc = prompt[i] + " or " + prompt[2] + "not found";
+            }
+            else if (my_cp(prompt[i], prompt[2]) > -1){
+                rc = "Copied " + prompt[i] + " to " + prompt[2];
+            }
         }
     }
 
@@ -1512,26 +1479,7 @@ string FileSystem::identify_function(string *prompt)
         rc = "command not found";
     }
 
-    return rc;
-}
-
-int FileSystem::sign_in(string name)
-{
-    int rc = -1;
-
-    // read users
-    read_disk(users, 17);
-
-    for (int i = 0; i < 6; i++)
-    {
-        string tempstr = '0' + users.name[i];
-        if (tempstr == name)
-        {
-            rc = 1;           // user exists on the disk
-            current_user = i; // save the index of the user
-            break;
-        }
-    }
+    delete[] prompt;
 
     return rc;
 }
