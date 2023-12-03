@@ -56,6 +56,10 @@ class FileSystem
             char bmap[TOTAL_BLOCK_NUM];
         };
 
+        struct indirectAddresses{
+            int addresses[1024];
+        };
+
         // Size is exactly 4096
         struct directory{
             struct directoryEntry dirEntries[16];
@@ -129,8 +133,8 @@ class FileSystem
         void ps(); //Just for testing
 
         //Server side code
-        string *scan(char *parameter);            // identify function names from filenames/paths
-        string identify_function(string *prompt); // call appropriate functions from prompt
+        string *scan(char *parameter, int &count);            // identify function names from filenames/paths
+        string identify_function(string *prompt, int count); // call appropriate functions from prompt
         void start_server();
 };
 
