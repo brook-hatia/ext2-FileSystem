@@ -1,60 +1,85 @@
 #include <iostream>
 #include <string>
-#include <sys/socket.h> //library for server-client communication
-#include <netinet/in.h> //for serveaddr_in which is used for IPv4
-#include <unistd.h>     //for close()
+#include <sys/socket.h>
+#include <netinet/in.h>
+#include <unistd.h>
 using namespace std;
 
 int main()
 {
-    struct sockaddr_in servaddr; // the "_in" in sockaddr_in is IPv4 socket address structure
+    struct sockaddr_in servaddr;
 
-    // initialize servaddr
-    servaddr.sin_family = AF_INET;         // IPv4
-    servaddr.sin_port = 8080;              // port number. "host to network short"
-    servaddr.sin_addr.s_addr = INADDR_ANY; // bind to server's IP addr
+    servaddr.sin_family = AF_INET;
+    servaddr.sin_port = htons(8080);
+    servaddr.sin_addr.s_addr = INADDR_ANY;
 
-    // for client we need socket(), connect(), read(), write() function calls
+    int socketfd = socket(AF_INET, SOCK_STREAM, 0);
 
-    int socketfd = socket(AF_INET, SOCK_STREAM, 0); // create socket. AF_INET for ipv4, SOCK_STREAM for TCP connection, 0 for protocol
+    int connectfd = connect(socketfd, (sockaddr *)&servaddr, sizeof(servaddr));
 
-    int connectfd = connect(socketfd, (sockaddr *)&servaddr, (socklen_t)sizeof(servaddr)); // send connection request to server, which the server will accept if successful
-
-    if (socketfd == -1 || connectfd == -1) // error returns -1
+    if (socketfd == -1 || connectfd == -1)
     {
         cout << "connection failed" << endl;
         return 1;
     }
-    cout << "connection successful" << endl;
 
+    cout << "connection successful" << endl;
+    string cwd = "";
 
     while (true)
     {
-        cout << "->";
+        cout << cwd << "->";
 
-        // char sendMsg[1024]; // allocate space for send message
         string sendMsg;
-        getline(cin, sendMsg); // client prompt
+        getline(cin, sendMsg);
 
-        // string str = sendMsg; // convert character array to string
-
-        if (sendMsg == "shutdown") // if client types "exit" terminate connection with server
+        if (sendMsg == "shutdown")
         {
+            // Send the shutdown message to the server
+            write(socketfd, sendMsg.c_str(), sendMsg.size());
+            // Client closes its own socket and exits the loop
+            close(socketfd);
             break;
         }
-            else if (sendMsg == "clear")
+
+        else if (sendMsg == "exit")
+        {
+            close(socketfd);
+            break;
+        }
+
+        else if (sendMsg == "clear")
         {
             system("clear"); // clears client shell
         }
 
-        int writefd = write(socketfd, sendMsg.c_str(), (size_t)sendMsg.size()); // send message to server
-        // cout << "\nwrite successful" << sendMsg;
+        // Send message to the server
+        write(socketfd, sendMsg.c_str(), sendMsg.size());
 
-        char readMsg[65535]={}; // allocated space for receiving from server
-        string s = (string)readMsg;
-        int readfd = read(socketfd, readMsg, (size_t)sizeof(readMsg)); // receive message from server
-        cout << "\nServer: " << readMsg << "\n";                       // read message from server
+        // Receive and display the server's response
+        char readMsg[65535] = {};
+        int readfd = read(socketfd, readMsg, sizeof(readMsg));
+        cout << "Server: " << readMsg;
+
+        // string s(readMsg);
+
+        // int begin = 0;
+        // for (int i = 0; i < s.size(); i++)
+        // {
+        //     if (s[i] == '.')
+        //     {
+        //         begin = i + 1;
+        //         break; // '.' found, exit loop
+        //     }
+        // }
+
+        // for (int i = begin; i < s.size(); i++)
+        // {
+        //     cwd += s[i];
+        // }
+
+        // std::cout << "cwd: " << cwd << std::endl;
     }
 
-    close(socketfd);
+    close(socketfd); // Close the client socket before exiting
 }
