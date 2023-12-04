@@ -20,6 +20,7 @@ class node{
         int pid;
         //pointer to the next node
         node *next;
+        
 
         node(int start = 0, int end = 0, int pid =-1, node *next = NULL);
 

@@ -12,8 +12,8 @@ int main()
 {
     FileSystem fs;
     fs.initialize_File_System();
-    fs.ps();
-    // fs.start_server();
+    // fs.ps();
+    fs.start_server();
 
     return 0;
 }
