@@ -803,8 +803,16 @@ int FileSystem::my_lcp(char *host_file)
 
         // update inode's file_size attribute
         inode.file_size = len;
+
+        //For Inidirect Addresses
         bool needIndirect = false;
         indirectAddresses indirect;
+        for(int i =0; i<1024;i++){
+            indirect.addresses[i] = -1;
+        }
+        indirectAddresses dIndirect;
+        int indirectCounter = 0;
+        int dIndirectCounter = 0;
 
         int temp_file_size = file_size;
         for (int i = 0; i < num_of_blocks; i++)
@@ -829,15 +837,29 @@ int FileSystem::my_lcp(char *host_file)
             if (i < 12){
                 inode.direct_block_pointers[i] = blockNum;
 
-            //For bigger file
+            //For bigger files
             } 
             if(i == 12){
                 inode.indirect_block_address = get_free_block();
                 needIndirect = true;
             }
 
-            if(needIndirect){ 
-                indirect.addresses[i-12] = blockNum;
+            if(needIndirect){
+                //create a new block for a new indirect when necessary
+                if(dIndirectCounter%1024 == 0){
+                    dIndirectCounter = 0;
+                    
+                    indirect.addresses[indirectCounter] = get_free_block();
+                    for(int i =0; i<1024;i++){
+                        dIndirect.addresses[i] = -1;
+                    }
+                    indirectCounter++;
+                }
+ 
+                dIndirect.addresses[dIndirectCounter] = blockNum;
+                dIndirectCounter++;
+                write_to_disk(dIndirect, sizeof(dIndirect), indirect.addresses[indirectCounter-1]);
+
             }
 
             temp_file_size -= write_size;
@@ -880,13 +902,46 @@ int FileSystem::my_Lcp(char *fs_file)
 
         Inode inode;
         readInode(inode, rc);
+        file_size = inode.file_size;
+        int num_of_blocks = ceil(float(file_size)/ 4096);
 
-        int steps = ceil(float(file_size)/ 4096);
+        //For Inidirect Addresses
+        bool needIndirect = true;
+        indirectAddresses indirect;
+        indirectAddresses dIndirect;
+        int indirectCounter = 0;
+        int dIndirectCounter = 0;
 
-        for (int i = 0; i < 12 && i < steps; i++) {
+
+        for (int i = 0; i < num_of_blocks; i++) {
             if (inode.direct_block_pointers[i] != 0) {
                 Block block;
-                read_disk(block, inode.direct_block_pointers[i]);
+
+                if(i<12){
+                    //Read direct blocks
+                    read_disk(block, inode.direct_block_pointers[i]);
+                }else{
+
+                    //Read indirect only one time
+                    if(needIndirect){
+                        read_disk(indirect, inode.indirect_block_address);
+                        needIndirect = false;
+                    }
+
+                    //Read Indirect Blocks
+                    //create a new block for a new indirect when necessary
+                    if(dIndirectCounter%1024 == 0){
+                        //Read double indirect one time for each indirect
+                        read_disk(dIndirect,indirect.addresses[indirectCounter]);
+                        dIndirectCounter = 0;
+                        indirectCounter++;    
+                    }
+                    
+                    //Read the data from double indirect address
+                    read_disk(block, dIndirect.addresses[dIndirectCounter]);
+                    dIndirectCounter++;
+
+                }
 
                 int write_size = (file_size < BLOCK_SIZE) ? file_size : BLOCK_SIZE;
 
@@ -1512,7 +1567,7 @@ string FileSystem::identify_function(string *prompt, int count)
                     }
                     else
                     {
-                        rc = "Directory created successfully " + prompt[1];
+                        rc += "Directory created successfully " + prompt[i] +"\n";
                 }
             }
         }
@@ -1533,7 +1588,7 @@ string FileSystem::identify_function(string *prompt, int count)
                 }
                 else
                 {
-                    rc = "Directory " + prompt[i] + " removed successfully";
+                    rc += "Directory " + prompt[i] + " removed successfully" + "\n";
                 }
             }
         }
@@ -1601,8 +1656,9 @@ else if (prompt[0] == "lcp")
     }
 
     else if (prompt[0] == "rm"){
+        
         int src_len = count;
-        for (int i = 1; i < src_len-1; i++){
+        for (int i = 1; i < src_len; i++){
             if (my_rm(prompt[i]) == -1){
                 rc = "File not found";
             }
@@ -1619,7 +1675,7 @@ else if (prompt[0] == "lcp")
             int temp = my_cp(prompt[i], prompt[src_len-1]);
 
             if (temp == -1){
-                rc = prompt[i] + " or " + prompt[src_len-1] + "not found";
+                rc += prompt[i] + " or " + prompt[src_len-1] + "not found" + "\n";
             }
             else if (temp > -1){
                 rc += "Copied " + prompt[i] + " to " + prompt[src_len-1] + "\n";
@@ -1632,10 +1688,10 @@ else if (prompt[0] == "lcp")
         for (int i = 1; i < src_len-1; i++){
             int temp = my_mv(prompt[i], prompt[src_len-1]);
             if (temp == -1){
-                rc = prompt[1] + " or " + prompt[2] + "not found";
+                rc += prompt[i] + " or " + prompt[src_len-1] + "not found" + "\n";
             }
             else if (temp > -1){
-                rc = "Moved " + prompt[1] + " to " + prompt[2];
+                rc += "Moved " + prompt[i] + " to " + prompt[src_len-1] + "\n";
             }
         }
     }
@@ -1686,4 +1742,3 @@ else if (prompt[0] == "lcp")
     }
     return rc;
 }
-
