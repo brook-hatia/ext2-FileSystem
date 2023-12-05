@@ -804,15 +804,7 @@ int FileSystem::my_lcp(char *host_file)
         // update inode's file_size attribute
         inode.file_size = len;
 
-        //For Inidirect Addresses
-        bool needIndirect = false;
-        indirectAddresses indirect;
-        for(int i =0; i<1024;i++){
-            indirect.addresses[i] = -1;
-        }
-        indirectAddresses dIndirect;
-        int indirectCounter = 0;
-        int dIndirectCounter = 0;
+        int block_start = 0;
 
         int temp_file_size = file_size;
         for (int i = 0; i < num_of_blocks; i++)
@@ -834,41 +826,17 @@ int FileSystem::my_lcp(char *host_file)
             write_to_disk(block, sizeof(Block), blockNum);
 
             //save block numbers on the inode
-            if (i < 12){
-                inode.direct_block_pointers[i] = blockNum;
-
-            //For bigger files
-            } 
-            if(i == 12){
-                inode.indirect_block_address = get_free_block();
-                needIndirect = true;
-            }
-
-            if(needIndirect){
-                //create a new block for a new indirect when necessary
-                if(dIndirectCounter%1024 == 0){
-                    dIndirectCounter = 0;
-                    
-                    indirect.addresses[indirectCounter] = get_free_block();
-                    for(int i =0; i<1024;i++){
-                        dIndirect.addresses[i] = -1;
-                    }
-                    indirectCounter++;
-                }
- 
-                dIndirect.addresses[dIndirectCounter] = blockNum;
-                dIndirectCounter++;
-                write_to_disk(dIndirect, sizeof(dIndirect), indirect.addresses[indirectCounter-1]);
-
+            // if (i < 12){
+            //     inode.direct_block_pointers[i] = blockNum;
+            // } 
+            if (block_start == 0){
+                block_start = blockNum;
             }
 
             temp_file_size -= write_size;
         }
 
-        //Write indirect address to disk if necessary
-        if(needIndirect){
-            write_to_disk(indirect, sizeof(indirect), inode.indirect_block_address);
-        }
+        inode.direct_block_pointers[0] = block_start;
 
         updateInode(inode, inodeNum);
 
@@ -876,10 +844,9 @@ int FileSystem::my_lcp(char *host_file)
         fclose(pFile);
     }
 
-
-
     return rc;
 }
+
 
 // copy a FS file from the current directory to the current directory in the host system
 int FileSystem::my_Lcp(char *fs_file)
@@ -905,58 +872,23 @@ int FileSystem::my_Lcp(char *fs_file)
         file_size = inode.file_size;
         int num_of_blocks = ceil(float(file_size)/ 4096);
 
-        //For Inidirect Addresses
-        bool needIndirect = true;
-        indirectAddresses indirect;
-        indirectAddresses dIndirect;
-        int indirectCounter = 0;
-        int dIndirectCounter = 0;
+        for (int x = 0,i = inode.direct_block_pointers[0]; x < inode.block_count; i++,x++) {
+            Block block;
 
+            read_disk(block, i);
 
-        for (int i = 0; i < num_of_blocks; i++) {
-            if (inode.direct_block_pointers[i] != 0) {
-                Block block;
+            int write_size = (file_size < BLOCK_SIZE) ? file_size : BLOCK_SIZE;
 
-                if(i<12){
-                    //Read direct blocks
-                    read_disk(block, inode.direct_block_pointers[i]);
-                }else{
+            // fseek(pFile, i * BLOCK_SIZE, SEEK_SET);
+            fwrite(block.text, 1, write_size, pFile);
 
-                    //Read indirect only one time
-                    if(needIndirect){
-                        read_disk(indirect, inode.indirect_block_address);
-                        needIndirect = false;
-                    }
+            file_size -= write_size;
 
-                    //Read Indirect Blocks
-                    //create a new block for a new indirect when necessary
-                    if(dIndirectCounter%1024 == 0){
-                        //Read double indirect one time for each indirect
-                        read_disk(dIndirect,indirect.addresses[indirectCounter]);
-                        dIndirectCounter = 0;
-                        indirectCounter++;    
-                    }
-                    
-                    //Read the data from double indirect address
-                    read_disk(block, dIndirect.addresses[dIndirectCounter]);
-                    dIndirectCounter++;
-
-                }
-
-                int write_size = (file_size < BLOCK_SIZE) ? file_size : BLOCK_SIZE;
-
-                // fseek(pFile, i * BLOCK_SIZE, SEEK_SET);
-                fwrite(block.text, 1, write_size, pFile);
-
-                file_size -= write_size;
-
-                // Break the loop if we have copied all the required bytes
-                if (file_size == 0) {
-                    break;
-                }
-            }
+            // Break the loop if we have copied all the required bytes
+            // if (file_size == 0) {
+            //     break;
+            // }
         }
-
 
         fclose(pFile);
     }
@@ -1050,32 +982,45 @@ string FileSystem::my_cat(string file) {
         int steps = ceil(float(inode.file_size)/ 4096);
         int temp_file_size = inode.file_size;
 
-        cout << inode.file_size;
-        cout << steps;
 
         // file is type directory
         if (inode.Mode[0] == '0'){
             rc = file + ": Is a directory";
         }
         else {
-            for (int i = 0; i < 12 && i < steps; i++) {
-                if (inode.direct_block_pointers[i] != 0) {
-                    Block block;
-                    read_disk(block, inode.direct_block_pointers[i]);
 
-                    // rc += block.text;
-                    int write_size = (temp_file_size < BLOCK_SIZE) ? temp_file_size : BLOCK_SIZE;
-                    // fseek(pFile, i * BLOCK_SIZE, SEEK_SET);
-                    string newText(block.text, block.text + write_size);
-                    rc += newText;
-                    temp_file_size -= write_size;
 
-                    // Break the loop if we have copied all the required bytes
-                    if (temp_file_size == 0) {
-                        break;
-                    }
-                }
+            // for (int i = 0; i < 12 && i < steps; i++) {
+            //     if (inode.direct_block_pointers[i] != 0) {
+            //         Block block;
+            //         read_disk(block, inode.direct_block_pointers[i]);
+
+            //         // rc += block.text;
+            //         int write_size = (temp_file_size < BLOCK_SIZE) ? temp_file_size : BLOCK_SIZE;
+            //         // fseek(pFile, i * BLOCK_SIZE, SEEK_SET);
+            //         string newText(block.text, block.text + write_size);
+            //         rc += newText;
+            //         temp_file_size -= write_size;
+
+            //         // Break the loop if we have copied all the required bytes
+            //         if (temp_file_size == 0) {
+            //             break;
+            //         }
+            //     }
+            // }
+
+            for (int x = 0,i = inode.direct_block_pointers[0]; x < inode.block_count; i++,x++) {
+                Block block;
+                read_disk(block, i);
+
+                int write_size = (temp_file_size < BLOCK_SIZE) ? temp_file_size : BLOCK_SIZE;
+                
+                string newText(block.text, block.text + write_size);
+                rc += newText;
+                temp_file_size -= write_size;
             }
+
+
         }
     }
 
@@ -1176,15 +1121,15 @@ int FileSystem::my_rm(string file) {
         if (inode.link_count == 0){
            
             // clear the block bit map need to change for double indirect address!!
-            for (int i = 0; i < 12; i++){
-                if (inode.direct_block_pointers[i] != 0){
+            for (int i = 0,x=inode.direct_block_pointers[0]; i < inode.block_count; i++,x++){
+                
                     // Block block;
                     // read_disk(block, inode.direct_block_pointers[i]);
                     // //strcpy(block.text, ""); // reset block data
                     // write_to_disk(block, sizeof(Block), inode.direct_block_pointers[i]); // write back to disk
-                    bm.bmap[inode.direct_block_pointers[i]] = '0'; // reset block bitmap
-                    inode.direct_block_pointers[i] = 0;
-                }
+                    bm.bmap[x] = '0'; // reset block bitmap
+                    inode.direct_block_pointers[0] = 0;
+                
             }
         }
 
@@ -1286,13 +1231,21 @@ int FileSystem::my_cp(string src_file, string dst_file) {
                     }
                 }
 
+                int temp = true;
                 //!! Need to change for indirect path
-                for (int i = 0; i < 12; i++){
-                    if (new_inode.direct_block_pointers[i] != 0){
+                for (int x=0,i = new_inode.direct_block_pointers[0]; x < new_inode.block_count; x++,i++){
+                    if (new_inode.direct_block_pointers[0] != 0){
                         Block new_block;
-                        read_disk(new_block, new_inode.direct_block_pointers[i]);
-                        new_inode.direct_block_pointers[i]=get_free_block();
-                        write_to_disk(new_block, BLOCK_SIZE ,new_inode.direct_block_pointers[i]);
+                        read_disk(new_block, i);
+                        
+                        int blockNum = get_free_block();
+
+                        if(temp){
+                            new_inode.direct_block_pointers[0]=blockNum;
+                            temp=false;
+                        }
+
+                        write_to_disk(new_block, BLOCK_SIZE ,blockNum);
                     }
                 }
                 updateInode(new_inode, temp_inode);
@@ -1309,94 +1262,106 @@ int FileSystem::my_cp(string src_file, string dst_file) {
 int FileSystem::my_mv(string src_file, string dst_file) {
     int rc = -1;
     
-
-    //check if the file exists in the FS
-    const char* fs_file = src_file.c_str();
-    for (int i = 0; i < 16; i++){
-        if (strcmp(wd.dirEntries[i].name, fs_file) == 0) {
-            rc = wd.dirEntries[i].inodeNumber;
+//     //check if the file exists in the FS
+//     const char* fs_file = src_file.c_str();
+//     for (int i = 0; i < 16; i++){
+//         if (strcmp(wd.dirEntries[i].name, fs_file) == 0) {
+//             rc = wd.dirEntries[i].inodeNumber;
             
-            break;
-        }
-    }
+//             break;
+//         }
+//     }
 
-    if (rc != -1){
-        Inode og_inode;
-        readInode(og_inode, rc);
+//     if (rc != -1){
+//         Inode og_inode;
+//         readInode(og_inode, rc);
         
-        // file is type directory
-        if (og_inode.Mode[0] == '0'){
-            rc = -2;
-        }
+//         // file is type directory
+//         if (og_inode.Mode[0] == '0'){
+//             rc = -2;
+//         }
 
-        else {
-            Inode new_inode;
-            readInode(new_inode, rc);
-            //loop to correct file
-            vector<string> components = path_parse(dst_file);
+//         else {
+//             Inode new_inode;
+//             readInode(new_inode, rc);
+//             //loop to correct file
+//             vector<string> components = path_parse(dst_file);
 
-            int nameFound = 0;
-            int temp_block_num;
-            directory temp;
-            //check if is absolute path
-            if (dst_file[0] == '/') {
-                //Remove the first empty element in the vector
-                components.erase(components.begin());
-                temp = rd;
-            }else{
-                temp = wd;
-            }
+//             int nameFound = 0;
+//             int temp_block_num;
+//             directory temp;
+//             //check if is absolute path
+//             if (dst_file[0] == '/') {
+//                 //Remove the first empty element in the vector
+//                 components.erase(components.begin());
+//                 temp = rd;
+//             }else{
+//                 temp = wd;
+//             }
 
-            //loop through all the names starting from correct directory
-            for (const string& comp : components) {
-                    for(int i =0; i< 16; ++i){
-                        if(temp.dirEntries[i].inodeNumber != -1){
-                            Inode inode;
-                            readInode(inode, temp.dirEntries[i].inodeNumber);  
+//             //loop through all the names starting from correct directory
+//             for (const string& comp : components) {
+//                     for(int i =0; i< 16; ++i){
+//                         if(temp.dirEntries[i].inodeNumber != -1){
+//                             Inode inode;
+//                             readInode(inode, temp.dirEntries[i].inodeNumber);  
                     
-                            if(temp.dirEntries[i].name==comp && inode.Mode[0]=='0'){
-                                nameFound = 1;
-                                temp_block_num = get_directory_block(temp, temp.dirEntries[i].inodeNumber);
-                                break;
-                            }
-                        }
-                    }
-                    //If name not found break
-                    if(!nameFound){
-                        rc = -1;
-                        nameFound=1;    // to mark difference of found
-                        break;
-                    }
-                    // Restart nameFound for next directory
-                    nameFound = 0;
-            }
-            //write the name of the copied file to the correct directory
-            if(!nameFound){
-                int temp_inode = get_free_inode();
-                for(int i =0; i<16;i++){
-                    if(temp.dirEntries[i].inodeNumber==-1){
-                        temp.dirEntries[i].inodeNumber = temp_inode;
-                        strcpy(temp.dirEntries[i].name, fs_file);
-                        write_to_disk(temp, sizeof(directory), temp_block_num);
-                        break;
-                    }
-                }
+//                             if(temp.dirEntries[i].name==comp && inode.Mode[0]=='0'){
+//                                 nameFound = 1;
+//                                 temp_block_num = get_directory_block(temp, temp.dirEntries[i].inodeNumber);
+//                                 break;
+//                             }
+//                         }
+//                     }
+//                     //If name not found break
+//                     if(!nameFound){
+//                         rc = -1;
+//                         nameFound=1;    // to mark difference of found
+//                         break;
+//                     }
+//                     // Restart nameFound for next directory
+//                     nameFound = 0;
+//             }
+//             //write the name of the copied file to the correct directory
+//             if(!nameFound){
+//                 int temp_inode = get_free_inode();
+//                 for(int i =0; i<16;i++){
+//                     if(temp.dirEntries[i].inodeNumber==-1){
+//                         temp.dirEntries[i].inodeNumber = temp_inode;
+//                         strcpy(temp.dirEntries[i].name, fs_file);
+//                         write_to_disk(temp, sizeof(directory), temp_block_num);
+//                         break;
+//                     }
+//                 }
 
-                //!! Need to change for indirect path
-                for (int i = 0; i < 12; i++){
-                    if (new_inode.direct_block_pointers[i] != 0){
-                        Block new_block;
-                        read_disk(new_block, new_inode.direct_block_pointers[i]);
-                        new_inode.direct_block_pointers[i]=get_free_block();
-                        write_to_disk(new_block, BLOCK_SIZE ,new_inode.direct_block_pointers[i]);
-                    }
-                }
-                updateInode(new_inode, temp_inode);
+//                 int temp = true;
+//                 //!! Need to change for indirect path
+//                 for (int x=0,i = new_inode.direct_block_pointers[0]; x < new_inode.block_count; x++,i++){
+//                     if (new_inode.direct_block_pointers[0] != 0){
+//                         Block new_block;
+//                         read_disk(new_block, i);
+                        
+//                         int blockNum = get_free_block();
+
+//                         if(temp){
+//                             new_inode.direct_block_pointers[0]=blockNum;
+//                             temp=false;
+//                         }
+
+//                         write_to_disk(new_block, BLOCK_SIZE ,blockNum);
+//                     }
+//                 }
+//                 updateInode(new_inode, temp_inode);
                     
-                my_rm(src_file);
+//                 my_rm(src_file);
 
-                }
-        }
+//                 }
+//         }
+//     }
+
+    rc = my_cp(src_file, dst_file);
+    if(rc>-1){
+        my_rm(src_file);
     }
 
     return rc;
@@ -1404,6 +1369,8 @@ int FileSystem::my_mv(string src_file, string dst_file) {
 
 string FileSystem::who_am_i(){
     string rc = users.name[current_user] + " " + to_string(users.uid[current_user]);
+
+
     return rc;
 }
 
