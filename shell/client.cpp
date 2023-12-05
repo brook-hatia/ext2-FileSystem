@@ -57,7 +57,7 @@ int main()
         write(socketfd, sendMsg.c_str(), sendMsg.size());
 
         // Receive and display the server's response
-        char readMsg[31457280] = {};
+        char readMsg[65535] = {};
         int readfd = read(socketfd, readMsg, sizeof(readMsg));
         cout << "Server: " << readMsg;
 

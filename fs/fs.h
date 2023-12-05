@@ -31,7 +31,7 @@ class FileSystem
             int link_count;
             int uid;
             int gid;
-            long file_size;
+            int file_size;
             char creation_time[14];
             char modified_time[14];
             char read_time[14];
@@ -56,10 +56,15 @@ class FileSystem
             char bmap[TOTAL_BLOCK_NUM];
         };
 
+        struct indirectAddresses{
+            int addresses[1024];
+        };
+
         // Size is exactly 4096
         struct directory{
             struct directoryEntry dirEntries[16];
         };
+
 
         //Variables
         blockBitmap bm; //block bit map
@@ -126,8 +131,6 @@ class FileSystem
         int my_mv(string src_file, string dst_file);
         int my_chown(string newowner, string filename); // change ownership of a file/directory
         vector<string> path_parse(string path);
-        vector<int> opened_inodes_list;
-        void update_parent_dir(int blockCount, bool flag);
 
         void ps(); //Just for testing
 
