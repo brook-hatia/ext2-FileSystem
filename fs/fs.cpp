@@ -421,43 +421,56 @@ void FileSystem::initialize_inode(Inode &inode, int uid,
 int FileSystem::my_mkdir(string directoryName)
 {
     int rc = -1;
+    bool found = false;
+
     // initialize inode
     Inode inode;
     int inodeNum = get_free_inode();
     initialize_inode(inode, users.uid[current_user], 0, BLOCK_SIZE, "0777", 1, 1, 1);
     inode.direct_block_pointers[0] = get_free_block();
 
-    // update working directory
+    // check if directory exists already
+    const char* fs_file = directoryName.c_str();
     for (int i = 0; i < 16; i++)
     {
-        if (wd.dirEntries[i].inodeNumber == -1)
-        {
-            rc = 1; 
-            wd.dirEntries[i].inodeNumber = inodeNum;              // add inode number
-            strcpy(wd.dirEntries[i].name, directoryName.c_str()); // add name
+        if (strcmp(wd.dirEntries[i].name, fs_file) == 0){
+            found = true;
             break;
         }
-    
     }
 
-    updateInode(inode, inodeNum);
-    directory new_dir;
-    for (int i = 0; i < 16; ++i)
-    {
-        new_dir.dirEntries[i].inodeNumber = -1;
-    }
+    if (!found){
+        // update working directory
+        for (int i = 0; i < 16; i++)
+        {
+            if (wd.dirEntries[i].inodeNumber == -1)
+            {
+                rc = 1; 
+                wd.dirEntries[i].inodeNumber = inodeNum;              // add inode number
+                strcpy(wd.dirEntries[i].name, directoryName.c_str()); // add name
+                break;
+            }
+        }
 
-    if(atRoot){
-        // write working directory to disk
-    
-        write_to_disk(wd, sizeof(directory), initDataBlock);
-        rd = wd;//update root directory
-    } else {
-        //write working directory to disk in the correct block
-        write_to_disk(wd, sizeof(directory), currentDirectoryBlock);   
-    }
+        updateInode(inode, inodeNum);
+        directory new_dir;
+        for (int i = 0; i < 16; ++i)
+        {
+            new_dir.dirEntries[i].inodeNumber = -1;
+        }
 
-    write_to_disk(new_dir, sizeof(directory), inode.direct_block_pointers[0]);
+        if(atRoot){
+            // write working directory to disk
+        
+            write_to_disk(wd, sizeof(directory), initDataBlock);
+            rd = wd;//update root directory
+        } else {
+            //write working directory to disk in the correct block
+            write_to_disk(wd, sizeof(directory), currentDirectoryBlock);   
+        }
+
+        write_to_disk(new_dir, sizeof(directory), inode.direct_block_pointers[0]);
+    }
 
     return rc;
 }
