@@ -10,6 +10,8 @@
 #include <sys/socket.h> //library for server-client communication
 #include <netinet/in.h> //for serveaddr_in which is used for IPv4
 #include <unistd.h>     //for close()
+#include <regex>
+
 #include "fs.h"
 using namespace std;
 
@@ -197,7 +199,7 @@ void FileSystem::initialize_File_System(){
         updateInode(rootInode, 0);
         im.imap[0] = '1';
        
-
+        rootInode.direct_block_pointers[0] = get_free_block();
         write_to_disk(wd, sizeof(directory), initDataBlock);
         rd = wd;
 
@@ -405,6 +407,7 @@ void FileSystem::initialize_inode(Inode &inode, int uid,
 
             // Set indirect_block_address and direct_block_pointers to an appropriate value (0)
             inode.indirect_block_address = -1;
+
             for (int j = 0; j < 12; ++j) {
                 inode.direct_block_pointers[j] = 0;
             }
@@ -800,8 +803,18 @@ int FileSystem::my_lcp(char *host_file)
 
         // update inode's file_size attribute
         inode.file_size = len;
+        cout<<inode.file_size;
+        cout<<num_of_blocks;
+
+        //For Inidirect Addresses
         bool needIndirect = false;
         indirectAddresses indirect;
+        for(int i =0; i<1024;i++){
+            indirect.addresses[i] = -1;
+        }
+        indirectAddresses dIndirect;
+        int indirectCounter = 0;
+        int dIndirectCounter = 0;
 
         int temp_file_size = file_size;
         for (int i = 0; i < num_of_blocks; i++)
@@ -826,15 +839,29 @@ int FileSystem::my_lcp(char *host_file)
             if (i < 12){
                 inode.direct_block_pointers[i] = blockNum;
 
-            //For bigger file
+            //For bigger files
             } 
             if(i == 12){
                 inode.indirect_block_address = get_free_block();
                 needIndirect = true;
             }
 
-            if(needIndirect){ 
-                indirect.addresses[i-12] = blockNum;
+            if(needIndirect){
+                //create a new block for a new indirect when necessary
+                if(dIndirectCounter%1024 == 0){
+                    dIndirectCounter = 0;
+                    
+                    indirect.addresses[indirectCounter] = get_free_block();
+                    for(int i =0; i<1024;i++){
+                        dIndirect.addresses[i] = -1;
+                    }
+                    indirectCounter++;
+                }
+ 
+                dIndirect.addresses[dIndirectCounter] = blockNum;
+                dIndirectCounter++;
+                write_to_disk(dIndirect, sizeof(dIndirect), indirect.addresses[indirectCounter-1]);
+
             }
 
             temp_file_size -= write_size;
@@ -877,13 +904,46 @@ int FileSystem::my_Lcp(char *fs_file)
 
         Inode inode;
         readInode(inode, rc);
+        file_size = inode.file_size;
+        int num_of_blocks = ceil(float(file_size)/ 4096);
 
-        int steps = ceil(float(file_size)/ 4096);
+        //For Inidirect Addresses
+        bool needIndirect = true;
+        indirectAddresses indirect;
+        indirectAddresses dIndirect;
+        int indirectCounter = 0;
+        int dIndirectCounter = 0;
 
-        for (int i = 0; i < 12 && i < steps; i++) {
+        cout<<num_of_blocks;
+        for (int i = 0; i < num_of_blocks; i++) {
             if (inode.direct_block_pointers[i] != 0) {
                 Block block;
-                read_disk(block, inode.direct_block_pointers[i]);
+
+                if(i<12){
+                    //Read direct blocks
+                    read_disk(block, inode.direct_block_pointers[i]);
+                }else{
+
+                    //Read indirect only one time
+                    if(needIndirect){
+                        read_disk(indirect, inode.indirect_block_address);
+                        needIndirect = false;
+                    }
+
+                    //Read Indirect Blocks
+                    //create a new block for a new indirect when necessary
+                    if(dIndirectCounter%1024 == 0){
+                        //Read double indirect one time for each indirect
+                        read_disk(dIndirect,indirect.addresses[indirectCounter]);
+                        dIndirectCounter = 0;
+                        indirectCounter++;    
+                    }
+                    
+                    //Read the data from double indirect address
+                    read_disk(block, dIndirect.addresses[dIndirectCounter]);
+                    dIndirectCounter++;
+
+                }
 
                 int write_size = (file_size < BLOCK_SIZE) ? file_size : BLOCK_SIZE;
 
@@ -991,6 +1051,9 @@ string FileSystem::my_cat(string file) {
 
         int steps = ceil(float(inode.file_size)/ 4096);
         int temp_file_size = inode.file_size;
+
+        cout << inode.file_size;
+        cout << steps;
 
         // file is type directory
         if (inode.Mode[0] == '0'){
@@ -1418,11 +1481,12 @@ void FileSystem::start_server(){
 
             // write(acceptfd, readMsg, readfd);
             cout << "Client: " << readMsg << endl;
-
+            
+            int count = 0;
             // scan the read message for function name, filename/path
-            string *contents = scan(readMsg);
+            string *contents = scan(readMsg, count);
             // string sendMsg = cwd + " " + identify_function(contents);
-            string sendMsg = identify_function(contents) + '\n' + cwd;
+            string sendMsg = identify_function(contents, count) + '\n' + cwd;
             write(acceptfd, sendMsg.c_str(), (size_t)sendMsg.size()); // send message to client
         }
     }
@@ -1432,29 +1496,40 @@ void FileSystem::start_server(){
 
 
 // call appropriate functions from prompt
-string *FileSystem::scan(char *parameter)
+string *FileSystem::scan(char *parameter, int &count)
 {
-    string str_param(parameter);      // convert char array to string
-    string *identify = new string[3]; // string[0] = function name, string[1] and string[2] = filenames/pathnames
+    string str(parameter);
+
+    //trim left spaces
+    regex left_pattern("^\\s+");
+    str = regex_replace(str, left_pattern, "");
+
+    //trim right spaces
+    regex right_pattern("\\s+$");
+    str = regex_replace(str, right_pattern, "");
+
+    //trim extra inner spaces
+    regex inner_pattern("\\s+");
+    str = regex_replace(str, inner_pattern, " ");
+
+    // append words to string array
+    string *prompts = new string[str.size()];
     int j = 0;
-
-    for (int i = 0; i < str_param.size(); i++)
-    {
-        if (str_param[i] == ' ')
-        {
+    for (int i = 0; i < str.size(); i++){
+        if (str[i] == ' '){
             j++;
-        } else{
-            identify[j] += str_param[i];
         }
+        else {
+            prompts[j] += str[i];
 
-
+        }
     }
-
-    return identify;
+    count = j+1;
+    return prompts;
 }
 
 // identify function names from filenames/paths
-string FileSystem::identify_function(string *prompt)
+string FileSystem::identify_function(string *prompt, int count)
 {
     string rc;
 
@@ -1486,13 +1561,16 @@ string FileSystem::identify_function(string *prompt)
         if(prompt[1] == ""){
             rc = "No argument, please try again";
         } else{
-            if (my_mkdir(prompt[1]) == -1)
-                {
-                    rc = "Directory not created";
+            int src_len = count;
+            for (int i = 1; i < src_len; i++){
+                if (my_mkdir(prompt[i]) == -1)
+                    {
+                        rc = "Directory not created";
+                    }
+                    else
+                    {
+                        rc += "Directory created successfully " + prompt[i] +"\n";
                 }
-                else
-                {
-                    rc = "Directory created successfully " + prompt[1];
             }
         }
     }
@@ -1504,13 +1582,16 @@ string FileSystem::identify_function(string *prompt)
         }
         else
         {
-            if (my_rmdir(prompt[1]) == 0)
-            {
-                rc = "Directory not found";
-            }
-            else
-            {
-                rc = "Directory " + prompt[1] + " removed successfully";
+            int src_len = count;
+            for (int i = 1; i < src_len; i++){
+                if (my_rmdir(prompt[i]) == 0)
+                {
+                    rc = "Directory not found";
+                }
+                else
+                {
+                    rc += "Directory " + prompt[i] + " removed successfully" + "\n";
+                }
             }
         }
     }
@@ -1577,34 +1658,43 @@ else if (prompt[0] == "lcp")
     }
 
     else if (prompt[0] == "rm"){
-        // prompt[1] = prompt[1].substr(1);
-        if (my_rm(prompt[1]) == -1){
-            rc = "File not found";
-        }
-        else {
-            rc = "File successfully removed";
+        
+        int src_len = count;
+        for (int i = 1; i < src_len; i++){
+            if (my_rm(prompt[i]) == -1){
+                rc = "File not found";
+            }
+            else {
+                rc = "File successfully removed";
+            }
         }
     }
 
     else if (prompt[0] == "cp"){
+        int src_len = count;
+        
+        for (int i = 1; i < src_len-1; i++){
+            int temp = my_cp(prompt[i], prompt[src_len-1]);
 
-        int temp = my_cp(prompt[1], prompt[2]);
-        if (temp == -1){
-            rc = prompt[1] + " or " + prompt[2] + "not found";
-        }
-        else if (temp > -1){
-            rc = "Copied " + prompt[1] + " to " + prompt[2];
+            if (temp == -1){
+                rc += prompt[i] + " or " + prompt[src_len-1] + "not found" + "\n";
+            }
+            else if (temp > -1){
+                rc += "Copied " + prompt[i] + " to " + prompt[src_len-1] + "\n";
+            }
         }
     }
 
     else if (prompt[0] == "mv"){
-
-        int temp = my_mv(prompt[1], prompt[2]);
-        if (temp == -1){
-            rc = prompt[1] + " or " + prompt[2] + "not found";
-        }
-        else if (temp > -1){
-            rc = "Moved " + prompt[1] + " to " + prompt[2];
+        int src_len = count;
+        for (int i = 1; i < src_len-1; i++){
+            int temp = my_mv(prompt[i], prompt[src_len-1]);
+            if (temp == -1){
+                rc += prompt[i] + " or " + prompt[src_len-1] + "not found" + "\n";
+            }
+            else if (temp > -1){
+                rc += "Moved " + prompt[i] + " to " + prompt[src_len-1] + "\n";
+            }
         }
     }
 
@@ -1654,4 +1744,3 @@ else if (prompt[0] == "lcp")
     }
     return rc;
 }
-
