@@ -774,89 +774,101 @@ string FileSystem::my_ls()
 int FileSystem::my_lcp(char *host_file)
 {
     int rc = -1;
+    bool found = false;
 
-    FILE *pFile = fopen(host_file, "r+b");
-
-    if (pFile != NULL)
+    // check if the file exists already
+    for (int i = 0; i < 16; i++)
     {
-        fseek(pFile, 0, SEEK_END);
-        long len = ftell(pFile);
-        file_size = len;
-        fseek(pFile, 0, SEEK_SET);
-
-        int num_of_blocks = ceil(float(len) / BLOCK_SIZE);
-        
-        Inode inode;
-        initialize_inode(inode, users.uid[current_user], 0, len, "1777", 1, 1, 1);
-        int inodeNum = get_free_inode();
-        rc = inodeNum;
-
-        int file_name_len = strlen(host_file);
-        for (int i = 0; i < 16; i++){
-            if (wd.dirEntries[i].inodeNumber == -1){
-                wd.dirEntries[i].inodeNumber = rc;
-                
-                if (file_name_len <= 250){
-                    strcpy(wd.dirEntries[i].name, string(host_file).c_str());
-                   
-                    if(atRoot){
-                        // write working directory to disk
-                        write_to_disk(wd, sizeof(directory), initDataBlock);
-                        rd = wd;//update root directory
-                    } else {
-                        //write working directory to disk in the correct block
-                        write_to_disk(wd, sizeof(directory), currentDirectoryBlock);   
-                    }
-                }
-                else {
-                    perror("file name exceeded 250");
-                    exit(1);
-                }
-                break;
-            }
+        if (strcmp(wd.dirEntries[i].name, host_file) == 0){
+            found = true;
+            break;
         }
+    }
 
-        // update inode's file_size attribute
-        inode.file_size = len;
+    if (!found){
+        FILE *pFile = fopen(host_file, "r+b");
 
-        int block_start = 0;
-
-        int temp_file_size = file_size;
-        for (int i = 0; i < num_of_blocks; i++)
+        if (pFile != NULL)
         {
-            int write_size = (temp_file_size < BLOCK_SIZE) ? temp_file_size : BLOCK_SIZE;
+            fseek(pFile, 0, SEEK_END);
+            long len = ftell(pFile);
+            file_size = len;
+            fseek(pFile, 0, SEEK_SET);
 
-            // Read the file in chunks
-            char buffer[BLOCK_SIZE];
-            memset(buffer, 0, BLOCK_SIZE);
-            // fseek(pFile, i * BLOCK_SIZE, SEEK_SET);
-            fread(buffer, 1, write_size, pFile);
+            int num_of_blocks = ceil(float(len) / BLOCK_SIZE);
+            
+            Inode inode;
+            initialize_inode(inode, users.uid[current_user], 0, len, "1777", 1, 1, 1);
+            int inodeNum = get_free_inode();
+            rc = inodeNum;
 
-            Block block;
-            // strncpy(block.text, buffer, BLOCK_SIZE);
-            memcpy(block.text, buffer, BLOCK_SIZE);
-
-            // Get a free block and write the block to disk
-            int blockNum = get_free_block();
-            write_to_disk(block, sizeof(Block), blockNum);
-
-            //save block numbers on the inode
-            // if (i < 12){
-            //     inode.direct_block_pointers[i] = blockNum;
-            // } 
-            if (block_start == 0){
-                block_start = blockNum;
+            int file_name_len = strlen(host_file);
+            for (int i = 0; i < 16; i++){
+                if (wd.dirEntries[i].inodeNumber == -1){
+                    wd.dirEntries[i].inodeNumber = rc;
+                    
+                    if (file_name_len <= 250){
+                        strcpy(wd.dirEntries[i].name, string(host_file).c_str());
+                    
+                        if(atRoot){
+                            // write working directory to disk
+                            write_to_disk(wd, sizeof(directory), initDataBlock);
+                            rd = wd;//update root directory
+                        } else {
+                            //write working directory to disk in the correct block
+                            write_to_disk(wd, sizeof(directory), currentDirectoryBlock);   
+                        }
+                    }
+                    else {
+                        perror("file name exceeded 250");
+                        exit(1);
+                    }
+                    break;
+                }
             }
 
-            temp_file_size -= write_size;
+            // update inode's file_size attribute
+            inode.file_size = len;
+
+            int block_start = 0;
+
+            int temp_file_size = file_size;
+            for (int i = 0; i < num_of_blocks; i++)
+            {
+                int write_size = (temp_file_size < BLOCK_SIZE) ? temp_file_size : BLOCK_SIZE;
+
+                // Read the file in chunks
+                char buffer[BLOCK_SIZE];
+                memset(buffer, 0, BLOCK_SIZE);
+                // fseek(pFile, i * BLOCK_SIZE, SEEK_SET);
+                fread(buffer, 1, write_size, pFile);
+
+                Block block;
+                // strncpy(block.text, buffer, BLOCK_SIZE);
+                memcpy(block.text, buffer, BLOCK_SIZE);
+
+                // Get a free block and write the block to disk
+                int blockNum = get_free_block();
+                write_to_disk(block, sizeof(Block), blockNum);
+
+                //save block numbers on the inode
+                // if (i < 12){
+                //     inode.direct_block_pointers[i] = blockNum;
+                // } 
+                if (block_start == 0){
+                    block_start = blockNum;
+                }
+
+                temp_file_size -= write_size;
+            }
+
+            inode.direct_block_pointers[0] = block_start;
+
+            updateInode(inode, inodeNum);
+
+
+            fclose(pFile);
         }
-
-        inode.direct_block_pointers[0] = block_start;
-
-        updateInode(inode, inodeNum);
-
-
-        fclose(pFile);
     }
 
     return rc;
