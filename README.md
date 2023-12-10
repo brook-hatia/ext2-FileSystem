@@ -1,12 +1,12 @@
-# ext2-File System
+## ext2-File System
 This is a lightweight ext2 file system that uses a TCP connection for communication. The file system mimics the UNIX file system.
-Features:
+# Features:
 - TCP communication (UNIX-like shell -> file system)
 - Storage of up to 2GB
 - Transfer files from and to the host system from the file system
 - Lightweight user authentication with up to 6 users (5 regular users, 1 super user (root))
 - Shell that recognizes commands, filenames, and paths
-Available commands:
+# Available commands:
 -  ls – provide the equivalent of a “ls -l” long output of the current directory.
 -  cd – change directory to the given directory
 -  mkdir – make a directory with the name given.
